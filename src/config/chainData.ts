@@ -17,7 +17,7 @@ import wbtcIcon from '~/assets/icons/wbtc.svg';
 import woethIcon from '~/assets/icons/woeth.svg';
 import wstethIcon from '~/assets/icons/wsteth.svg';
 
-const { ALCHEMY_KEY, IS_TESTNET, ASP_ENDPOINT } = getEnv();
+const { ALCHEMY_KEY, IS_TESTNET, ASP_ENDPOINT, HYPERSYNC_KEY } = getEnv();
 
 // Add chains to the whitelist to be used in the app
 const mainnetChains: readonly [Chain, ...Chain[]] = [mainnet];
