@@ -72,6 +72,17 @@ export const useWithdraw = () => {
   const publicClient = usePublicClient({ chainId });
 
   const {
+    selectedPoolInfo,
+    chainId,
+    balanceBN: { decimals },
+    relayersData,
+    selectedRelayer,
+  } = useChainContext();
+
+  const { accountService, addWithdrawal } = useAccountContext();
+  const publicClient = usePublicClient({ chainId });
+
+  const {
     amount,
     target,
     poolAccount,

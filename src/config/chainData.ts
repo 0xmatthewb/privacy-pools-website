@@ -298,6 +298,18 @@ const mainnetChainData: ChainData = {
           conversionAbi: woethAbi,
         },
       },
+      {
+        chainId: mainnet.id,
+        address: '0x05e4DBD71B56861eeD2Aaa12d00A797F04B5D3c0',
+        assetAddress: '0xdC035D45d973E3EC169d2276DDab16f1e407384F',
+        scope: 10083421949316970946867916491567109470259179563818386567305777802830033294482n,
+        deploymentBlock: 22917987n,
+        entryPointAddress: '0x6818809EefCe719E480a7526D76bD3e561526b46',
+        maxDeposit: parseUnits('1000000', 18),
+        asset: 'USDS',
+        assetDecimals: 18,
+        icon: usdsIcon.src,
+      },
     ],
   },
 };

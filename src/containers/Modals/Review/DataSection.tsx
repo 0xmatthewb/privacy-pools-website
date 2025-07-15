@@ -156,6 +156,19 @@ export const DataSection = () => {
     return trimmed;
   };
 
+  // Create full precision tooltips - show complete decimal precision
+  const formatFullPrecision = (value: bigint, decimals: number) => {
+    const valueStr = value.toString();
+    if (valueStr.length <= decimals) {
+      return `0.${'0'.repeat(decimals - valueStr.length)}${valueStr}`;
+    }
+    const integerPart = valueStr.slice(0, -decimals);
+    const decimalPart = valueStr.slice(-decimals);
+    return `${integerPart}.${decimalPart}`;
+  };
+
+  const feeTooltip = `${formatFullPrecision(fees, decimals)} ${symbol}`;
+
   const feesCollectorAddress = isDeposit
     ? selectedPoolInfo.entryPointAddress
     : currentSelectedRelayerData?.relayerAddress;
@@ -488,4 +501,38 @@ const TotalUSD = styled(Typography)(({ theme }) => ({
   lineHeight: '18px',
   color: theme.palette.text.secondary,
   textAlign: 'center',
+}));
+
+const QuoteTimer = styled(Value)(({ theme }) => ({
+  fontWeight: 500,
+  color: theme.palette.warning.main,
+}));
+
+const ExpiredQuote = styled(Value)(({ theme }) => ({
+  fontWeight: 500,
+  color: theme.palette.error.main,
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1),
+}));
+
+const RefreshButton = styled('button')(({ theme }) => ({
+  background: 'none',
+  border: `1px solid ${theme.palette.primary.main}`,
+  color: theme.palette.primary.main,
+  padding: theme.spacing(0.5, 1),
+  borderRadius: theme.spacing(0.5),
+  fontSize: '1.2rem',
+  cursor: 'pointer',
+  marginLeft: theme.spacing(1),
+
+  '&:hover': {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
+  },
+
+  '&:disabled': {
+    opacity: 0.6,
+    cursor: 'not-allowed',
+  },
 }));
