@@ -21,6 +21,7 @@ interface PoolPreviewSectionProps {
   poolAccounts: PoolAccount[];
   aspUrl: string;
   showMaxAccounts?: number;
+  onNavigateToViewAll: (poolId: string) => void;
 }
 
 const PoolPreviewSection = ({
@@ -29,6 +30,7 @@ const PoolPreviewSection = ({
   poolAccounts,
   aspUrl,
   showMaxAccounts = 5,
+  onNavigateToViewAll,
 }: PoolPreviewSectionProps) => {
   const chain = chainData[chainId];
   const { isLoading, isError } = useASP(chainId, poolInfo.scope.toString(), aspUrl);
@@ -98,7 +100,7 @@ const PoolPreviewSection = ({
           <ViewAllLink
             onClick={() => {
               const poolId = `${chainId}-${poolInfo.scope}`;
-              window.location.href = `/pool-accounts#pool-${poolId}`;
+              onNavigateToViewAll(poolId);
             }}
           >
             Showing {showMaxAccounts} of {poolAccounts.length} accounts - View All
@@ -171,6 +173,10 @@ export const AllPoolAccountsPreview = () => {
     push(ROUTER.poolAccounts.base);
   };
 
+  const handleNavigateToViewAll = (poolId: string) => {
+    push(`${ROUTER.poolAccounts.base}#pool-${poolId}`);
+  };
+
   return (
     <>
       {/* Header section */}
@@ -238,6 +244,7 @@ export const AllPoolAccountsPreview = () => {
                   poolAccounts={accounts}
                   aspUrl={chain.aspUrl}
                   showMaxAccounts={5}
+                  onNavigateToViewAll={handleNavigateToViewAll}
                 />
               );
             })}
