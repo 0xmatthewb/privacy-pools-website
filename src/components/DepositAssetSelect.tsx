@@ -72,20 +72,30 @@ export const DepositAssetSelect: React.FC = () => {
         );
       }}
       renderInput={(params) => {
-        const icon = selectedOption ? getAssetIcon(selectedOption.value) : null;
         return (
           <TextField
             {...params}
             size='small'
             variant='outlined'
-            placeholder='Search tokens...'
+            placeholder='token'
             InputProps={{
               ...params.InputProps,
               startAdornment: (
-                <>
-                  {icon && <IconWrapper sx={{ mr: '0.4rem' }}>{icon}</IconWrapper>}
-                  <DepositLabel>Deposit</DepositLabel>
-                </>
+                <DepositLabel
+                  onClick={(e) => {
+                    e.preventDefault();
+                    // Trigger the popup to open
+                    const autocompleteElement = e.currentTarget.closest('.MuiAutocomplete-root');
+                    const popupButton = autocompleteElement?.querySelector(
+                      '.MuiAutocomplete-popupIndicator',
+                    ) as HTMLButtonElement;
+                    if (popupButton) {
+                      popupButton.click();
+                    }
+                  }}
+                >
+                  Deposit
+                </DepositLabel>
               ),
             }}
           />
@@ -171,4 +181,8 @@ const DepositLabel = styled('span')(({ theme }) => ({
   color: theme.palette.common.white,
   fontWeight: 500,
   marginRight: '4px',
+  cursor: 'pointer',
+  '&:hover': {
+    opacity: 0.8,
+  },
 }));
