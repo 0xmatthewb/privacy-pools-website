@@ -16,4 +16,5 @@ export * from './Logo';
 export * from './ExtendedTooltip';
 export * from './AssetSelect';
 export * from './DepositAssetSelect';
+export * from './WithdrawAssetSelect';
 export * from './SafeApp';

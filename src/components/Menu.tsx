@@ -127,6 +127,8 @@ const SIconButton = styled(IconButton, {
 })<{ open: boolean }>(({ theme, open }) => {
   return {
     color: theme.palette.text.primary,
+    height: '40px',
+    width: '40px',
     ...(open && {
       border: theme.palette.border.main,
       color: theme.palette.primary.contrastText,

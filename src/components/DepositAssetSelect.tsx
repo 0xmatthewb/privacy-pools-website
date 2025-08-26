@@ -181,6 +181,7 @@ const DepositLabel = styled('span')(({ theme }) => ({
   color: theme.palette.common.white,
   fontWeight: 500,
   marginRight: '4px',
+  marginLeft: '8px',
   cursor: 'pointer',
   '&:hover': {
     opacity: 0.8,
