@@ -15,7 +15,7 @@ const queryClient = new QueryClient();
 
 export function WalletProvider({ children }: Props) {
   return (
-    <WagmiProvider config={config} reconnectOnMount={false}>
+    <WagmiProvider config={config} reconnectOnMount={true}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider modalSize='compact' theme={darkTheme()}>
           {children}

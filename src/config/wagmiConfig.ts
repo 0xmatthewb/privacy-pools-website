@@ -62,7 +62,6 @@ const allConnectors = [...connectors, safe()];
 export const defaultConfig = createConfig({
   chains: allChains,
   ssr: false,
-  storage: null,
   transports,
   batch: { multicall: true },
   connectors: allConnectors,

@@ -2,8 +2,8 @@
 
 import { createContext, useEffect, useState } from 'react';
 import { useAccount, useDisconnect } from 'wagmi';
-import { setUserLoggedCookie, deleteUserLoggedCookie, deleteUserConnectedCookie } from '~/actions';
-import { useAccountContext } from '~/hooks';
+import { useAccountContext, useChainContext } from '~/hooks';
+import { aspClient } from '~/utils/aspClient';
 
 interface AuthContextType {
   isLogged: boolean;
@@ -21,28 +21,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { resetGlobalState, seed } = useAccountContext();
   const { address } = useAccount();
   const [isLogged, setIsLogged] = useState<boolean>(false);
+  const { chainId, chain } = useChainContext();
 
   const logout = () => {
     disconnect();
     resetGlobalState();
-    deleteUserLoggedCookie();
-    deleteUserConnectedCookie();
     setIsLogged(false);
   };
 
-  const login = (_seed?: string) => {
+  const login = async (_seed?: string) => {
     if ((seed || _seed) && address) {
-      setUserLoggedCookie();
       setIsLogged(true);
+
+      // Fetch pool stats when user logs in
+      try {
+        const poolStats = await aspClient.fetchPoolStats(chain.aspUrl, chainId);
+        console.log('Pool Stats:', poolStats);
+      } catch (error) {
+        console.error('Failed to fetch pool stats:', error);
+      }
     } else {
       throw new Error('Seed or address is missing');
     }
   };
 
+  // Initialize authentication state
   useEffect(() => {
-    deleteUserLoggedCookie();
-    deleteUserConnectedCookie();
-  }, []);
+    // If user already has both wallet connected and seed loaded, they're logged in
+    if (address && seed) {
+      setIsLogged(true);
+    } else {
+      setIsLogged(false);
+    }
+  }, [address, seed]);
 
   return (
     <AuthContext.Provider

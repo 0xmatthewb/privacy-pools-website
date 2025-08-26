@@ -2,13 +2,13 @@
 
 import { styled } from '@mui/material';
 import { SafeAppWrapper } from '~/components';
-import { ActivityPreview, GlobalPool, PoolAccountsPreview } from '~/containers';
+import { ActivityPreview, GlobalPool, AllPoolAccountsPreview } from '~/containers';
 
 export const Main = () => {
   return (
     <SafeAppWrapper>
       <MainContainer>
-        <PoolAccountsPreview />
+        <AllPoolAccountsPreview />
 
         <GlobalPool />
 

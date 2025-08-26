@@ -1,12 +1,12 @@
 'use client';
 
 import { AdvancedViewContainer } from '~/components';
-import { PoolAccountsFull } from '~/containers';
+import { AllPoolAccountsFull } from '~/containers';
 
 const PoolAccountsPage = () => {
   return (
     <AdvancedViewContainer>
-      <PoolAccountsFull />
+      <AllPoolAccountsFull />
     </AdvancedViewContainer>
   );
 };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useASP, useRelayer, useChainContext } from '~/hooks';
 
 export const useExternalServices = () => {
@@ -21,6 +21,13 @@ export const useExternalServices = () => {
   const aspData = useASP(chainId, selectedPoolInfo.scope.toString(), aspUrl);
 
   const isLoading = aspData.isLoading || relayerData.isQuoteLoading;
+
+  // Log pool stats when available
+  useEffect(() => {
+    if (aspData.poolStatsData) {
+      console.log('Pool Stats (from useASP):', aspData.poolStatsData);
+    }
+  }, [aspData.poolStatsData]);
 
   return {
     aspData,

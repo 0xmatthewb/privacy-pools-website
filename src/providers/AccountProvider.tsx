@@ -6,6 +6,7 @@ import { useChainContext, useExternalServices, useNotifications, usePoolAccounts
 import { useAccountManager } from '~/hooks/useAccountManager';
 import { AccountService, DepositsByLabelResponse, EventType, PoolAccount, ReviewStatus, HistoryData } from '~/types';
 import { addPoolAccount, addWithdrawal, getPoolAccountsFromAccount, addRagequit } from '~/utils';
+import { aspClient } from '~/utils/aspClient';
 
 const { TEST_MODE } = getEnv();
 
@@ -50,7 +51,7 @@ export const AccountProvider = ({ children }: Props) => {
   const [poolAccountsByChainScope, setPoolAccountsByChainScope] = useState<ContextType['poolAccountsByChainScope']>({});
   const [isLoading, setIsLoading] = useState(false);
   const [hideEmptyPools, setHideEmptyPools] = useState(false);
-  const { selectedPoolInfo } = useChainContext();
+  const { selectedPoolInfo, chain } = useChainContext();
   const { addNotification } = useNotifications();
   const {
     aspData: { mtLeavesData, fetchDepositsByLabel, refetchMtLeaves, isError: aspError, isLoading: aspIsLoading },
@@ -176,8 +177,18 @@ export const AccountProvider = ({ children }: Props) => {
 
       const _poolAccounts = await loadAccount(seed);
       fetchAndProcessDeposits(_poolAccounts);
+
+      // Fetch pool stats when account is loaded
+      try {
+        if (chain?.aspUrl) {
+          const poolStats = await aspClient.fetchPoolStats(chain.aspUrl, selectedPoolInfo.chainId);
+          console.log('Pool Stats (on account load):', poolStats);
+        }
+      } catch (error) {
+        console.error('Failed to fetch pool stats on account load:', error);
+      }
     },
-    [loadAccount, fetchAndProcessDeposits],
+    [loadAccount, fetchAndProcessDeposits, selectedPoolInfo, chain],
   );
 
   const handleUpdatePoolAccounts = useCallback(async () => {

@@ -1,6 +1,11 @@
 import { getConfig } from '~/config';
 import { MtRootResponse, PoolResponse, MtLeavesResponse, DepositsByLabelResponse, AllEventsResponse } from '~/types';
 
+// Define type for pool stats response
+interface PoolStatsResponse {
+  [key: string]: unknown;
+}
+
 const {
   constants: { ITEMS_PER_PAGE },
 } = getConfig();
@@ -42,6 +47,9 @@ const aspClient = {
     fetchWithHeaders<MtLeavesResponse>(`${aspUrl}/${chainId}/public/mt-leaves`, {
       'X-Pool-Scope': scope,
     }),
+
+  fetchPoolStats: (aspUrl: string, chainId: number) =>
+    fetchWithHeaders<PoolStatsResponse>(`${aspUrl}/${chainId}/public/pools-stats`),
 };
 
 export { aspClient };

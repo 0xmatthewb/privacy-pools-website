@@ -22,7 +22,7 @@ export const PoolAccountsFull = () => {
 
   return (
     <>
-      <AdvancedNavigation title='Pool Accounts' isLogged={isLogged} count={allPools} />
+      <AdvancedNavigation title='My Pools' isLogged={isLogged} count={allPools} />
 
       <PAContainer>
         <Stack direction='row' alignItems='end' justifyContent='end' padding={2} gap={1}>
