@@ -22,5 +22,5 @@ const SButton = styled(Button)(() => ({
   textTransform: 'none',
   padding: '0.5rem 1.7rem',
   lineHeight: '100%',
-  height: '2.8rem',
+  height: '40px',
 }));
