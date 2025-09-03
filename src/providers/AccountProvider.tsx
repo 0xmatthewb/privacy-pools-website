@@ -281,7 +281,7 @@ export const AccountProvider = ({ children }: Props) => {
 
   useEffect(() => {
     if (aspError) {
-      addNotification('error', 'ASP Error: Service interruption detected with the ASP. Please try again later.');
+      addNotification('error', 'ASP Error: Scheduled maintenance ongoing. Please try again later.');
     }
   }, [aspError, addNotification]);
 

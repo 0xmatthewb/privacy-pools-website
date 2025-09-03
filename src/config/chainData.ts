@@ -2,6 +2,7 @@ import { Address, parseEther, parseUnits } from 'viem';
 import { Chain, mainnet, sepolia } from 'viem/chains';
 import { getEnv } from '~/config/env';
 import { sUSDSAbi } from '~/config/sUSDSAbi';
+import { woethAbi } from '~/config/woethAbi';
 import daiIcon from '~/assets/icons/dai.svg';
 import frxusdIcon from '~/assets/icons/frxusd.svg';
 import mainnetIcon from '~/assets/icons/mainnet_color.svg';
@@ -12,6 +13,7 @@ import usdeIcon from '~/assets/icons/usde.svg';
 import usdsIcon from '~/assets/icons/usds.svg';
 import usdtIcon from '~/assets/icons/usdt.svg';
 import wbtcIcon from '~/assets/icons/wbtc.svg';
+import woethIcon from '~/assets/icons/woeth.svg';
 import wstethIcon from '~/assets/icons/wsteth.svg';
 
 const { ALCHEMY_KEY, IS_TESTNET, ASP_ENDPOINT } = getEnv();
@@ -33,7 +35,8 @@ export type ChainAssets =
   | 'wBTC'
   | 'USDe'
   | 'USD1'
-  | 'FRXUSD';
+  | 'FRXUSD'
+  | 'WOETH';
 
 export interface AlternativeTokenConfig {
   tokenAddress: Address;
@@ -43,6 +46,13 @@ export interface AlternativeTokenConfig {
   stakingMethod: 'deposit' | 'stake' | 'mint'; // Different protocols use different method names
   previewMethod: 'previewDeposit' | 'previewStake' | 'previewMint';
   stakingAbi: readonly unknown[];
+}
+
+export interface PriceConversionConfig {
+  type: 'wrapped'; // Type of conversion (can be extended later)
+  underlyingAsset: ChainAssets; // The underlying asset to get price from
+  conversionMethod: 'convertToAssets'; // Method to call for conversion
+  conversionAbi: readonly unknown[]; // ABI for the conversion method
 }
 
 export interface PoolInfo {
@@ -57,11 +67,13 @@ export interface PoolInfo {
   assetDecimals?: number;
   icon?: string;
   isStableAsset?: boolean; // Includes stablecoins and yield-bearing stablecoins
+  isNativeToken?: boolean; // True for native tokens (ETH on Ethereum, etc.)
   alternativeTokens?: AlternativeTokenConfig[]; // Allow depositing alternative tokens that get converted
   yield?: {
     apy: number; // Annual percentage yield (e.g., 5.2 for 5.2%)
     source: string; // Description of yield source (e.g., "Savings USDS staking rewards")
   };
+  priceConversion?: PriceConversionConfig; // Custom price conversion config
 }
 
 export interface ChainData {
@@ -107,6 +119,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 18,
         icon: mainnetIcon.src,
         isStableAsset: false,
+        isNativeToken: true,
       },
       {
         chainId: mainnet.id,
@@ -120,6 +133,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 18,
         icon: usdsIcon.src,
         isStableAsset: true,
+        isNativeToken: false,
       },
       {
         chainId: mainnet.id,
@@ -133,6 +147,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 18,
         icon: susdsIcon.src,
         isStableAsset: true,
+        isNativeToken: false,
         yield: {
           apy: 5.2, // Current sUSDS APY
           source: 'USDS Savings Rate staking rewards',
@@ -161,6 +176,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 18,
         icon: daiIcon.src,
         isStableAsset: true,
+        isNativeToken: false,
       },
       {
         chainId: mainnet.id,
@@ -174,6 +190,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 6,
         icon: usdtIcon.src,
         isStableAsset: true,
+        isNativeToken: false,
       },
       {
         chainId: mainnet.id,
@@ -187,6 +204,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 6,
         icon: usdcIcon.src,
         isStableAsset: true,
+        isNativeToken: false,
       },
       {
         chainId: mainnet.id,
@@ -200,6 +218,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 18,
         icon: wstethIcon.src,
         isStableAsset: false,
+        isNativeToken: false,
       },
       {
         chainId: mainnet.id,
@@ -213,6 +232,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 8,
         icon: wbtcIcon.src,
         isStableAsset: false,
+        isNativeToken: false,
       },
       {
         chainId: mainnet.id,
@@ -226,6 +246,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 18,
         icon: usdeIcon.src,
         isStableAsset: true,
+        isNativeToken: false,
       },
       {
         chainId: mainnet.id,
@@ -239,6 +260,7 @@ const mainnetChainData: ChainData = {
         assetDecimals: 18,
         icon: usd1Icon.src,
         isStableAsset: true,
+        isNativeToken: false,
       },
       {
         chainId: mainnet.id,
@@ -252,6 +274,27 @@ const mainnetChainData: ChainData = {
         assetDecimals: 18,
         icon: frxusdIcon.src,
         isStableAsset: true,
+        isNativeToken: false,
+      },
+      {
+        chainId: mainnet.id,
+        address: '0x7d2959bCFb936a84531518e8391DdBa844e03ebE',
+        assetAddress: '0xDcEe70654261AF21C44c093C300eD3Bb97b78192',
+        scope: 16898919049235900033552063077301976558571004961846668515709160815006981236808n,
+        deploymentBlock: 23239091n,
+        entryPointAddress: '0x6818809EefCe719E480a7526D76bD3e561526b46',
+        maxDeposit: parseUnits('1000000', 18),
+        asset: 'WOETH',
+        assetDecimals: 18,
+        icon: woethIcon.src,
+        isStableAsset: false,
+        isNativeToken: false,
+        priceConversion: {
+          type: 'wrapped',
+          underlyingAsset: 'ETH',
+          conversionMethod: 'convertToAssets',
+          conversionAbi: woethAbi,
+        },
       },
     ],
   },
@@ -285,6 +328,7 @@ const testnetChainData: ChainData = {
         assetDecimals: 18,
         icon: mainnetIcon.src,
         isStableAsset: false,
+        isNativeToken: true,
       },
       {
         chainId: sepolia.id,
@@ -297,6 +341,7 @@ const testnetChainData: ChainData = {
         asset: 'USDT',
         assetDecimals: 6,
         isStableAsset: true,
+        isNativeToken: false,
       },
       {
         chainId: sepolia.id,
@@ -309,6 +354,7 @@ const testnetChainData: ChainData = {
         asset: 'USDC',
         assetDecimals: 6,
         isStableAsset: true,
+        isNativeToken: false,
       },
     ],
   },
