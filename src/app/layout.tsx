@@ -1,7 +1,9 @@
+import { Suspense } from 'react';
 import { Metadata } from 'next';
 import InitColorSchemeScript from '@mui/material/InitColorSchemeScript';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import { MainContent, NoScriptMessage, PageWrapper } from '~/components';
+import { FeatureFlagInitializer } from '~/components/FeatureFlagInitializer';
 import { ibm_plex_mono } from '~/config/fonts';
 import { Footer, Header, Modals } from '~/containers';
 import { NotificationContainer } from '~/containers/NotificationContainer';
@@ -24,6 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <InitColorSchemeScript attribute='class' />
 
           <Providers>
+            <Suspense fallback={null}>
+              <FeatureFlagInitializer />
+            </Suspense>
             <PageWrapper>
               <NoScriptMessage>
                 <p>This website requires JavaScript to function properly.</p>
