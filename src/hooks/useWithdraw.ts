@@ -87,6 +87,18 @@ export const useWithdraw = () => {
   } = usePoolAccountsContext();
 
   const commitment = poolAccount?.lastCommitment;
+
+  // CRITICAL DEBUG: Log commitment immediately after assignment from poolAccount
+  if (commitment) {
+    console.log('🔍 [COMMITMENT_DEBUG] Initial commitment from poolAccount:', {
+      hash: commitment.hash,
+      label: commitment.label,
+      value: commitment.value,
+      originalpoolaccount: poolAccount,
+      commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+      timestamp: new Date().toISOString(),
+    });
+  }
   const aspLeaves = aspData.mtLeavesData?.aspLeaves;
   const stateLeaves = aspData.mtLeavesData?.stateTreeLeaves;
   const { address } = useAccount();
@@ -252,14 +264,39 @@ export const useWithdraw = () => {
           feeBPSForWithdraw.toString(),
         );
 
-        console.log('withdrawal commitment hash:', commitment.hash);
+        // CRITICAL DEBUG: Log commitment details at proof generation start
+        console.log('🔍 [COMMITMENT_DEBUG] Starting proof generation with commitment:', {
+          hash: commitment.hash,
+          label: commitment.label,
+          value: commitment.value,
+          originalCommitmentObject: commitment,
+          commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+          timestamp: new Date().toISOString(),
+        });
         poolScope = await getScope(publicClient, selectedPoolInfo?.address);
         stateMerkleProof = await getMerkleProof(stateLeaves?.map(BigInt) as bigint[], commitment.hash);
         aspMerkleProof = await getMerkleProof(aspLeaves?.map(BigInt), commitment.label);
         const context = await getContext(newWithdrawal, poolScope as Hash);
         const { secret, nullifier } = createWithdrawalSecrets(accountService, commitment);
 
+        // CRITICAL DEBUG: Log commitment after secret generation
+        console.log('🔍 [COMMITMENT_DEBUG] After createWithdrawalSecrets:', {
+          hash: commitment.hash,
+          label: commitment.label,
+          value: commitment.value,
+          commitmentChanged: JSON.stringify(commitment) !== JSON.stringify(poolAccount?.lastCommitment),
+          timestamp: new Date().toISOString(),
+        });
+
         aspMerkleProof.index = Object.is(aspMerkleProof.index, NaN) ? 0 : aspMerkleProof.index; // workaround for NaN index, SDK issue
+
+        // CRITICAL DEBUG: Log commitment before prepareWithdrawalProofInput
+        console.log('🔍 [COMMITMENT_DEBUG] Before prepareWithdrawalProofInput:', {
+          hash: commitment.hash,
+          label: commitment.label,
+          value: commitment.value,
+          timestamp: new Date().toISOString(),
+        });
 
         const withdrawalProofInput = prepareWithdrawalProofInput(
           commitment,
@@ -270,6 +307,14 @@ export const useWithdraw = () => {
           secret,
           nullifier,
         );
+
+        // CRITICAL DEBUG: Log commitment after prepareWithdrawalProofInput
+        console.log('🔍 [COMMITMENT_DEBUG] After prepareWithdrawalProofInput:', {
+          hash: commitment.hash,
+          label: commitment.label,
+          value: commitment.value,
+          timestamp: new Date().toISOString(),
+        });
         if (aspMerkleProof && stateMerkleProof) merkleProofGenerated = true;
 
         // Use worker for progress updates, but still call actual SDK for proof generation
@@ -304,6 +349,14 @@ export const useWithdraw = () => {
             reject(error);
           };
 
+          // CRITICAL DEBUG: Log commitment before sending to worker
+          console.log('🔍 [COMMITMENT_DEBUG] Before sending to worker:', {
+            hash: commitment.hash,
+            label: commitment.label,
+            value: commitment.value,
+            timestamp: new Date().toISOString(),
+          });
+
           worker.postMessage({
             type: 'generateWithdrawalProof',
             payload: { commitment, input: withdrawalProofInput },
@@ -311,8 +364,24 @@ export const useWithdraw = () => {
           });
         });
 
+        // CRITICAL DEBUG: Log commitment before SDK proof generation
+        console.log('🔍 [COMMITMENT_DEBUG] Before generateWithdrawalProof SDK call:', {
+          hash: commitment.hash,
+          label: commitment.label,
+          value: commitment.value,
+          timestamp: new Date().toISOString(),
+        });
+
         // Run both worker (for progress) and actual SDK call in parallel
         const [, proof] = await Promise.all([workerPromise, generateWithdrawalProof(commitment, withdrawalProofInput)]);
+
+        // CRITICAL DEBUG: Log commitment after SDK proof generation
+        console.log('🔍 [COMMITMENT_DEBUG] After generateWithdrawalProof SDK call:', {
+          hash: commitment.hash,
+          label: commitment.label,
+          value: commitment.value,
+          timestamp: new Date().toISOString(),
+        });
 
         const verified = await verifyWithdrawalProof(proof);
 
@@ -403,12 +472,28 @@ export const useWithdraw = () => {
 
         const poolScope = await getScope(publicClient, selectedPoolInfo.address);
 
+        // CRITICAL DEBUG: Log commitment at start of withdrawal execution
+        console.log('🔍 [COMMITMENT_DEBUG] Starting withdrawal execution with commitment:', {
+          hash: commitment.hash,
+          label: commitment.label,
+          value: commitment.value,
+          timestamp: new Date().toISOString(),
+        });
+
         try {
           setIsClosable(false);
           setIsLoading(true);
 
           // Reset the quote timer when transaction starts
           resetQuote();
+
+          // CRITICAL DEBUG: Log commitment before relayer call
+          console.log('🔍 [COMMITMENT_DEBUG] Before relayer call:', {
+            hash: commitment.hash,
+            label: commitment.label,
+            value: commitment.value,
+            timestamp: new Date().toISOString(),
+          });
 
           const res = await relayerData.relay({
             withdrawal: currentWithdrawal as WithdrawalRelayerPayload,
@@ -417,6 +502,15 @@ export const useWithdraw = () => {
             scope: poolScope.toString(),
             chainId,
             feeCommitment,
+          });
+
+          // CRITICAL DEBUG: Log commitment after relayer call
+          console.log('🔍 [COMMITMENT_DEBUG] After relayer call:', {
+            hash: commitment.hash,
+            label: commitment.label,
+            value: commitment.value,
+            relayerSuccess: res.success,
+            timestamp: new Date().toISOString(),
           });
 
           if (!res.success) {
@@ -570,9 +664,26 @@ export const useWithdraw = () => {
         progress: number;
       }) => void,
     ) => {
+      // CRITICAL DEBUG: Log commitment at the very start of generateProofAndWithdraw
+      console.log('🔍 [COMMITMENT_DEBUG] generateProofAndWithdraw START:', {
+        hash: commitment?.hash,
+        label: commitment?.label,
+        value: commitment?.value,
+        hasCommitment: !!commitment,
+        poolAccountId: poolAccount?.name,
+        timestamp: new Date().toISOString(),
+      });
+
       try {
         // Generate proof and call withdraw when complete
         await generateProof(onProgress, (proof, withdrawal, newSecretKeys) => {
+          // CRITICAL DEBUG: Log commitment at callback execution
+          console.log('🔍 [COMMITMENT_DEBUG] generateProofAndWithdraw callback execution:', {
+            hash: commitment?.hash,
+            label: commitment?.label,
+            value: commitment?.value,
+            timestamp: new Date().toISOString(),
+          });
           withdraw(proof, withdrawal, newSecretKeys);
         });
       } catch (error) {
@@ -580,7 +691,7 @@ export const useWithdraw = () => {
         throw error;
       }
     },
-    [generateProof, withdraw],
+    [generateProof, withdraw, commitment, poolAccount?.id],
   );
 
   return { withdraw, generateProof, generateProofAndWithdraw, isLoading };

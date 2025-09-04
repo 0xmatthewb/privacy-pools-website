@@ -41,7 +41,16 @@ export const prepareWithdrawalProofInput = (
   secret: Secret,
   nullifier: Secret,
 ): WithdrawalProofInput => {
-  return {
+  // CRITICAL DEBUG: Log commitment at prepareWithdrawalProofInput entry
+  console.log('🔍 [COMMITMENT_DEBUG] prepareWithdrawalProofInput entry:', {
+    hash: commitment.hash,
+    label: commitment.label,
+    value: commitment.value,
+    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+    timestamp: new Date().toISOString(),
+  });
+
+  const result = {
     withdrawalAmount: amount,
     stateMerkleProof: {
       root: stateMerkleProof.root as Hash,
@@ -63,4 +72,16 @@ export const prepareWithdrawalProofInput = (
     newSecret: secret,
     newNullifier: nullifier,
   };
+
+  // CRITICAL DEBUG: Log commitment at prepareWithdrawalProofInput exit
+  console.log('🔍 [COMMITMENT_DEBUG] prepareWithdrawalProofInput exit:', {
+    hash: commitment.hash,
+    label: commitment.label,
+    value: commitment.value,
+    commitmentHashInResult: result.stateMerkleProof.leaf,
+    commitmentLabelInResult: result.aspMerkleProof.leaf,
+    timestamp: new Date().toISOString(),
+  });
+
+  return result;
 };

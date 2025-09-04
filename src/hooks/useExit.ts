@@ -106,6 +106,16 @@ export const useExit = () => {
     ) => {
       if (!poolAccount?.lastCommitment) throw new Error('Pool account commitment not found');
 
+      // CRITICAL DEBUG: Log commitment at ragequit proof generation start
+      console.log('🔍 [COMMITMENT_DEBUG] Starting ragequit proof generation with commitment:', {
+        hash: poolAccount.lastCommitment.hash,
+        label: poolAccount.lastCommitment.label,
+        value: poolAccount.lastCommitment.value,
+        originalCommitmentObject: poolAccount.lastCommitment,
+        commitmentStringified: JSON.stringify({ ...poolAccount.lastCommitment, nullifier: '', secret: '' }),
+        timestamp: new Date().toISOString(),
+      });
+
       // Use worker for progress updates, but still call actual SDK for proof generation
       const workerPromise = new Promise((resolve, reject) => {
         const worker = new Worker(new URL('../workers/zkProofWorker.ts', import.meta.url));
@@ -138,6 +148,14 @@ export const useExit = () => {
           reject(error);
         };
 
+        // CRITICAL DEBUG: Log commitment before sending to ragequit worker
+        console.log('🔍 [COMMITMENT_DEBUG] Before sending to ragequit worker:', {
+          hash: poolAccount.lastCommitment.hash,
+          label: poolAccount.lastCommitment.label,
+          value: poolAccount.lastCommitment.value,
+          timestamp: new Date().toISOString(),
+        });
+
         worker.postMessage({
           type: 'generateRagequitProof',
           payload: poolAccount.lastCommitment,
@@ -145,8 +163,24 @@ export const useExit = () => {
         });
       });
 
+      // CRITICAL DEBUG: Log commitment before SDK ragequit proof generation
+      console.log('🔍 [COMMITMENT_DEBUG] Before generateRagequitProof SDK call:', {
+        hash: poolAccount.lastCommitment.hash,
+        label: poolAccount.lastCommitment.label,
+        value: poolAccount.lastCommitment.value,
+        timestamp: new Date().toISOString(),
+      });
+
       // Run both worker (for progress) and actual SDK call in parallel
       const [, proof] = await Promise.all([workerPromise, generateRagequitProof(poolAccount.lastCommitment)]);
+
+      // CRITICAL DEBUG: Log commitment after SDK ragequit proof generation
+      console.log('🔍 [COMMITMENT_DEBUG] After generateRagequitProof SDK call:', {
+        hash: poolAccount.lastCommitment.hash,
+        label: poolAccount.lastCommitment.label,
+        value: poolAccount.lastCommitment.value,
+        timestamp: new Date().toISOString(),
+      });
 
       setProof(proof);
 

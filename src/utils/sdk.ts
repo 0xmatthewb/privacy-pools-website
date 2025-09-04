@@ -81,8 +81,32 @@ const dataService = new DataService(dataServiceConfig);
  * @throws {ProofError} If proof generation fails
  */
 export const generateRagequitProof = async (commitment: AccountCommitment): Promise<CommitmentProof> => {
+  // CRITICAL DEBUG: Log commitment at SDK generateRagequitProof entry
+  console.log('🔍 [COMMITMENT_DEBUG] SDK generateRagequitProof entry:', {
+    hash: commitment.hash,
+    label: commitment.label,
+    value: commitment.value,
+    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+    timestamp: new Date().toISOString(),
+  });
+
   const sdkInstance = initializeSDK();
-  return await sdkInstance.proveCommitment(commitment.value, commitment.label, commitment.nullifier, commitment.secret);
+  const result = await sdkInstance.proveCommitment(
+    commitment.value,
+    commitment.label,
+    commitment.nullifier,
+    commitment.secret,
+  );
+
+  // CRITICAL DEBUG: Log commitment after SDK ragequit proof call
+  console.log('🔍 [COMMITMENT_DEBUG] SDK generateRagequitProof exit:', {
+    hash: commitment.hash,
+    label: commitment.label,
+    value: commitment.value,
+    timestamp: new Date().toISOString(),
+  });
+
+  return result;
 };
 
 /**
@@ -108,23 +132,49 @@ export const verifyRagequitProof = async ({ proof, publicSignals }: CommitmentPr
  * @throws {ProofError} If proof generation fails
  */
 export const generateWithdrawalProof = async (commitment: AccountCommitment, input: WithdrawalProofInput) => {
+  // CRITICAL DEBUG: Log commitment at SDK generateWithdrawalProof entry
+  console.log('🔍 [COMMITMENT_DEBUG] SDK generateWithdrawalProof entry:', {
+    hash: commitment.hash,
+    label: commitment.label,
+    value: commitment.value,
+    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+    timestamp: new Date().toISOString(),
+  });
+
   const sdkInstance = initializeSDK();
-  return await sdkInstance.proveWithdrawal(
-    {
-      preimage: {
-        label: commitment.label,
-        value: commitment.value,
-        precommitment: {
-          hash: BigInt('0x1234') as Hash,
-          nullifier: commitment.nullifier,
-          secret: commitment.secret,
-        },
+
+  const commitmentInput = {
+    preimage: {
+      label: commitment.label,
+      value: commitment.value,
+      precommitment: {
+        hash: BigInt('0x1234') as Hash,
+        nullifier: commitment.nullifier,
+        secret: commitment.secret,
       },
-      hash: commitment.hash,
-      nullifierHash: BigInt('0x1234') as Hash,
     },
-    input,
-  );
+    hash: commitment.hash,
+    nullifierHash: BigInt('0x1234') as Hash,
+  };
+
+  // CRITICAL DEBUG: Log commitment input to SDK
+  console.log('🔍 [COMMITMENT_DEBUG] SDK commitment input:', {
+    original: { ...commitment, secret: '', nullifier: '' },
+    transformed: { ...commitmentInput, precommitment: { hash: commitmentInput.hash } },
+    timestamp: new Date().toISOString(),
+  });
+
+  const result = await sdkInstance.proveWithdrawal(commitmentInput, input);
+
+  // CRITICAL DEBUG: Log commitment after SDK call
+  console.log('🔍 [COMMITMENT_DEBUG] SDK generateWithdrawalProof exit:', {
+    hash: commitment.hash,
+    label: commitment.label,
+    value: commitment.value,
+    timestamp: new Date().toISOString(),
+  });
+
+  return result;
 };
 
 export const getContext = async (withdrawal: Withdrawal, scope: Hash) => {
@@ -167,7 +217,35 @@ export const createDepositSecrets = (accountService: AccountService, scope: Hash
 };
 
 export const createWithdrawalSecrets = (accountService: AccountService, commitment: AccountCommitment) => {
-  return accountService.createWithdrawalSecrets(commitment);
+  // CRITICAL DEBUG: Log commitment at createWithdrawalSecrets entry
+  console.log('🔍 [COMMITMENT_DEBUG] SDK createWithdrawalSecrets entry:', {
+    hash: commitment.hash,
+    label: commitment.label,
+    value: commitment.value,
+    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+    timestamp: new Date().toISOString(),
+  });
+
+  const result = accountService.createWithdrawalSecrets(commitment);
+
+  // CRITICAL DEBUG: Log commitment after createWithdrawalSecrets
+  console.log('🔍 [COMMITMENT_DEBUG] SDK createWithdrawalSecrets exit:', {
+    hash: commitment.hash,
+    label: commitment.label,
+    value: commitment.value,
+    commitmentModified:
+      JSON.stringify(commitment) !==
+      JSON.stringify({
+        hash: commitment.hash,
+        label: commitment.label,
+        value: commitment.value,
+        nullifier: commitment.nullifier,
+        secret: commitment.secret,
+      }),
+    timestamp: new Date().toISOString(),
+  });
+
+  return result;
 };
 
 export const addPoolAccount = (
