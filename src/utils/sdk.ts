@@ -18,6 +18,7 @@ import {
   ChainConfig,
   PoolInfo,
   PoolEventsError,
+  hashPrecommitment,
 } from '@0xbow/privacy-pools-core-sdk';
 import { createPublicClient, Hex } from 'viem';
 import { ChainData, chainData, whitelistedChains } from '~/config';
@@ -147,18 +148,20 @@ export const generateWithdrawalProof = async (commitment: AccountCommitment, inp
 
   const sdkInstance = initializeSDK();
 
+  const precommitmentHash = hashPrecommitment(commitment.nullifier, commitment.secret);
+
   const commitmentInput = {
     preimage: {
       label: commitment.label,
       value: commitment.value,
       precommitment: {
-        hash: BigInt('0x1234') as Hash,
+        hash: precommitmentHash,
         nullifier: commitment.nullifier,
         secret: commitment.secret,
       },
     },
     hash: commitment.hash,
-    nullifierHash: BigInt('0x1234') as Hash,
+    nullifierHash: precommitmentHash,
   };
 
   // CRITICAL DEBUG: Log commitment input to SDK
@@ -328,8 +331,44 @@ export const getPoolAccountsFromAccount = async (account: PrivacyPoolAccount, ch
     let idx = 1;
 
     for (const poolAccount of _poolAccounts) {
+      // CRITICAL DEBUG: Log before computing lastCommitment
+      console.log('🔍 [COMMITMENT_DEBUG] Computing lastCommitment for poolAccount:', {
+        hasChildren: poolAccount.children.length > 0,
+        childrenCount: poolAccount.children.length,
+        deposit: {
+          hash: poolAccount.deposit.hash,
+          label: poolAccount.deposit.label,
+          value: poolAccount.deposit.value,
+          hasNullifier: !!poolAccount.deposit.nullifier && poolAccount.deposit.nullifier !== '',
+          hasSecret: !!poolAccount.deposit.secret && poolAccount.deposit.secret !== '',
+          blockNumber: poolAccount.deposit.blockNumber,
+        },
+        children: poolAccount.children.map((child, index) => ({
+          index,
+          hash: child.hash,
+          label: child.label,
+          value: child.value,
+          hasNullifier: !!child.nullifier && child.nullifier !== '',
+          hasSecret: !!child.secret && child.secret !== '',
+          blockNumber: child.blockNumber,
+        })),
+        timestamp: new Date().toISOString(),
+      });
+
       const lastCommitment =
         poolAccount.children.length > 0 ? poolAccount.children[poolAccount.children.length - 1] : poolAccount.deposit;
+
+      // CRITICAL DEBUG: Log the selected lastCommitment
+      console.log('🔍 [COMMITMENT_DEBUG] Selected lastCommitment:', {
+        source: poolAccount.children.length > 0 ? `children[${poolAccount.children.length - 1}]` : 'deposit',
+        hash: lastCommitment.hash,
+        label: lastCommitment.label,
+        value: lastCommitment.value,
+        hasNullifier: !!lastCommitment.nullifier && lastCommitment.nullifier !== '',
+        hasSecret: !!lastCommitment.secret && lastCommitment.secret !== '',
+        blockNumber: lastCommitment.blockNumber,
+        timestamp: new Date().toISOString(),
+      });
 
       const _chainId = Object.keys(chainData).find((key) =>
         chainData[Number(key)].poolInfo.some((pool) => pool.scope === _scope),
