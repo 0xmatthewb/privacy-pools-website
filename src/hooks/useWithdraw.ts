@@ -252,6 +252,7 @@ export const useWithdraw = () => {
           feeBPSForWithdraw.toString(),
         );
 
+        console.log('withdrawal commitment hash:', commitment.hash);
         poolScope = await getScope(publicClient, selectedPoolInfo?.address);
         stateMerkleProof = await getMerkleProof(stateLeaves?.map(BigInt) as bigint[], commitment.hash);
         aspMerkleProof = await getMerkleProof(aspLeaves?.map(BigInt), commitment.label);
