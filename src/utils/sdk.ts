@@ -380,18 +380,47 @@ export const getPoolAccountsFromAccount = async (account: PrivacyPoolAccount, ch
         timestamp: new Date().toISOString(),
       });
 
-      const lastCommitment =
-        poolAccount.children.length > 0 ? poolAccount.children[poolAccount.children.length - 1] : poolAccount.deposit;
+      // CRITICAL FIX: Find the spendable commitment (one with valid nullifier/secret)
+      // Start with the last child and work backwards, then check deposit
+      let lastCommitment = poolAccount.deposit;
+      let commitmentSource = 'deposit';
+
+      // Check children from newest to oldest for one with valid secrets
+      for (let i = poolAccount.children.length - 1; i >= 0; i--) {
+        const child = poolAccount.children[i];
+        if (child.nullifier && String(child.nullifier) !== '' && child.secret && String(child.secret) !== '') {
+          lastCommitment = child;
+          commitmentSource = `children[${i}]`;
+          break;
+        }
+      }
+
+      // If no children have secrets, verify deposit has secrets, otherwise it's an error
+      if (
+        commitmentSource === 'deposit' &&
+        (!lastCommitment.nullifier ||
+          String(lastCommitment.nullifier) === '' ||
+          !lastCommitment.secret ||
+          String(lastCommitment.secret) === '')
+      ) {
+        console.error('🚨 [COMMITMENT_DEBUG] CRITICAL: No spendable commitment found with valid secrets!');
+      }
 
       // CRITICAL DEBUG: Log the selected lastCommitment
-      console.log('🔍 [COMMITMENT_DEBUG] Selected lastCommitment:', {
-        source: poolAccount.children.length > 0 ? `children[${poolAccount.children.length - 1}]` : 'deposit',
+      console.log('🔍 [COMMITMENT_DEBUG] Selected spendable lastCommitment:', {
+        source: commitmentSource,
         hash: lastCommitment.hash,
         label: lastCommitment.label,
         value: lastCommitment.value,
         hasNullifier: !!lastCommitment.nullifier && String(lastCommitment.nullifier) !== '',
         hasSecret: !!lastCommitment.secret && String(lastCommitment.secret) !== '',
         blockNumber: lastCommitment.blockNumber,
+        selectedFromChildren: poolAccount.children.map((child, idx) => ({
+          index: idx,
+          hash: child.hash,
+          hasSecrets:
+            !!child.nullifier && String(child.nullifier) !== '' && !!child.secret && String(child.secret) !== '',
+        })),
         timestamp: new Date().toISOString(),
       });
 
