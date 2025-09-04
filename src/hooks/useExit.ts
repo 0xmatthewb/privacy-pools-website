@@ -108,11 +108,13 @@ export const useExit = () => {
 
       // CRITICAL DEBUG: Log commitment at ragequit proof generation start
       console.log('🔍 [COMMITMENT_DEBUG] Starting ragequit proof generation with commitment:', {
-        hash: poolAccount.lastCommitment.hash,
-        label: poolAccount.lastCommitment.label,
-        value: poolAccount.lastCommitment.value,
-        originalCommitmentObject: poolAccount.lastCommitment,
-        commitmentStringified: JSON.stringify({ ...poolAccount.lastCommitment, nullifier: '', secret: '' }),
+        hash: poolAccount.lastCommitment.hash.toString(),
+        label: poolAccount.lastCommitment.label.toString(),
+        value: poolAccount.lastCommitment.value.toString(),
+        originalCommitmentObject: poolAccount.lastCommitment.toString(),
+        commitmentStringified: JSON.stringify({ ...poolAccount.lastCommitment, nullifier: '', secret: '' }, (_, v) =>
+          typeof v === 'bigint' ? v.toString() : v,
+        ),
         timestamp: new Date().toISOString(),
       });
 
@@ -150,9 +152,9 @@ export const useExit = () => {
 
         // CRITICAL DEBUG: Log commitment before sending to ragequit worker
         console.log('🔍 [COMMITMENT_DEBUG] Before sending to ragequit worker:', {
-          hash: poolAccount.lastCommitment.hash,
-          label: poolAccount.lastCommitment.label,
-          value: poolAccount.lastCommitment.value,
+          hash: poolAccount.lastCommitment.hash.toString(),
+          label: poolAccount.lastCommitment.label.toString(),
+          value: poolAccount.lastCommitment.value.toString(),
           timestamp: new Date().toISOString(),
         });
 
@@ -165,9 +167,9 @@ export const useExit = () => {
 
       // CRITICAL DEBUG: Log commitment before SDK ragequit proof generation
       console.log('🔍 [COMMITMENT_DEBUG] Before generateRagequitProof SDK call:', {
-        hash: poolAccount.lastCommitment.hash,
-        label: poolAccount.lastCommitment.label,
-        value: poolAccount.lastCommitment.value,
+        hash: poolAccount.lastCommitment.hash.toString(),
+        label: poolAccount.lastCommitment.label.toString(),
+        value: poolAccount.lastCommitment.value.toString(),
         timestamp: new Date().toISOString(),
       });
 
@@ -176,9 +178,9 @@ export const useExit = () => {
 
       // CRITICAL DEBUG: Log commitment after SDK ragequit proof generation
       console.log('🔍 [COMMITMENT_DEBUG] After generateRagequitProof SDK call:', {
-        hash: poolAccount.lastCommitment.hash,
-        label: poolAccount.lastCommitment.label,
-        value: poolAccount.lastCommitment.value,
+        hash: poolAccount.lastCommitment.hash.toString(),
+        label: poolAccount.lastCommitment.label.toString(),
+        value: poolAccount.lastCommitment.value.toString(),
         timestamp: new Date().toISOString(),
       });
 

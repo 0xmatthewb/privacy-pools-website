@@ -43,10 +43,12 @@ export const prepareWithdrawalProofInput = (
 ): WithdrawalProofInput => {
   // CRITICAL DEBUG: Log commitment at prepareWithdrawalProofInput entry
   console.log('🔍 [COMMITMENT_DEBUG] prepareWithdrawalProofInput entry:', {
-    hash: commitment.hash,
-    label: commitment.label,
-    value: commitment.value,
-    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+    hash: commitment.hash.toString(),
+    label: commitment.label.toString(),
+    value: commitment.value.toString(),
+    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }, (_, v) =>
+      typeof v === 'bigint' ? v.toString() : v,
+    ),
     timestamp: new Date().toISOString(),
   });
 
@@ -75,11 +77,11 @@ export const prepareWithdrawalProofInput = (
 
   // CRITICAL DEBUG: Log commitment at prepareWithdrawalProofInput exit
   console.log('🔍 [COMMITMENT_DEBUG] prepareWithdrawalProofInput exit:', {
-    hash: commitment.hash,
-    label: commitment.label,
-    value: commitment.value,
-    commitmentHashInResult: result.stateMerkleProof.leaf,
-    commitmentLabelInResult: result.aspMerkleProof.leaf,
+    hash: commitment.hash.toString(),
+    label: commitment.label.toString(),
+    value: commitment.value.toString(),
+    commitmentHashInResult: result.stateMerkleProof.leaf.toString(),
+    commitmentLabelInResult: result.aspMerkleProof.leaf.toString(),
     timestamp: new Date().toISOString(),
   });
 

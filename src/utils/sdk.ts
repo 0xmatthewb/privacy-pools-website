@@ -86,7 +86,9 @@ export const generateRagequitProof = async (commitment: AccountCommitment): Prom
     hash: commitment.hash,
     label: commitment.label,
     value: commitment.value,
-    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }, (_, v) =>
+      typeof v === 'bigint' ? v.toString() : v,
+    ),
     timestamp: new Date().toISOString(),
   });
 
@@ -137,7 +139,9 @@ export const generateWithdrawalProof = async (commitment: AccountCommitment, inp
     hash: commitment.hash,
     label: commitment.label,
     value: commitment.value,
-    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }, (_, v) =>
+      typeof v === 'bigint' ? v.toString() : v,
+    ),
     timestamp: new Date().toISOString(),
   });
 
@@ -222,7 +226,9 @@ export const createWithdrawalSecrets = (accountService: AccountService, commitme
     hash: commitment.hash,
     label: commitment.label,
     value: commitment.value,
-    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+    commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }, (_, v) =>
+      typeof v === 'bigint' ? v.toString() : v,
+    ),
     timestamp: new Date().toISOString(),
   });
 
@@ -234,14 +240,17 @@ export const createWithdrawalSecrets = (accountService: AccountService, commitme
     label: commitment.label,
     value: commitment.value,
     commitmentModified:
-      JSON.stringify(commitment) !==
-      JSON.stringify({
-        hash: commitment.hash,
-        label: commitment.label,
-        value: commitment.value,
-        nullifier: commitment.nullifier,
-        secret: commitment.secret,
-      }),
+      JSON.stringify(commitment, (_, v) => (typeof v === 'bigint' ? v.toString() : v)) !==
+      JSON.stringify(
+        {
+          hash: commitment.hash,
+          label: commitment.label,
+          value: commitment.value,
+          nullifier: commitment.nullifier,
+          secret: commitment.secret,
+        },
+        (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+      ),
     timestamp: new Date().toISOString(),
   });
 

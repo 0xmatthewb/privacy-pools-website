@@ -91,11 +91,13 @@ export const useWithdraw = () => {
   // CRITICAL DEBUG: Log commitment immediately after assignment from poolAccount
   if (commitment) {
     console.log('🔍 [COMMITMENT_DEBUG] Initial commitment from poolAccount:', {
-      hash: commitment.hash,
-      label: commitment.label,
-      value: commitment.value,
+      hash: commitment.hash.toString(),
+      label: commitment.label.toString(),
+      value: commitment.value.toString(),
       originalpoolaccount: poolAccount,
-      commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+      commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }, (_, v) =>
+        typeof v === 'bigint' ? v.toString() : v,
+      ),
       timestamp: new Date().toISOString(),
     });
   }
@@ -270,7 +272,9 @@ export const useWithdraw = () => {
           label: commitment.label,
           value: commitment.value,
           originalCommitmentObject: commitment,
-          commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }),
+          commitmentStringified: JSON.stringify({ ...commitment, secret: '', nullifier: '' }, (_, v) =>
+            typeof v === 'bigint' ? v.toString() : v,
+          ),
           timestamp: new Date().toISOString(),
         });
         poolScope = await getScope(publicClient, selectedPoolInfo?.address);
@@ -284,7 +288,9 @@ export const useWithdraw = () => {
           hash: commitment.hash,
           label: commitment.label,
           value: commitment.value,
-          commitmentChanged: JSON.stringify(commitment) !== JSON.stringify(poolAccount?.lastCommitment),
+          commitmentChanged:
+            JSON.stringify(commitment, (_, v) => (typeof v === 'bigint' ? v.toString() : v)) !==
+            JSON.stringify(poolAccount?.lastCommitment, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
           timestamp: new Date().toISOString(),
         });
 
