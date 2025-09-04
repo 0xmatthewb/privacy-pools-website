@@ -691,7 +691,7 @@ export const useWithdraw = () => {
         throw error;
       }
     },
-    [generateProof, withdraw, commitment, poolAccount?.id],
+    [generateProof, withdraw, commitment, poolAccount?.name],
   );
 
   return { withdraw, generateProof, generateProofAndWithdraw, isLoading };
