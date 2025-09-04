@@ -296,7 +296,19 @@ export const addWithdrawal = async (
     txHash: Hex;
   },
 ) => {
-  return accountService.addWithdrawalCommitment(
+  // CRITICAL DEBUG: Log parentCommitment before addWithdrawalCommitment
+  console.log('🔍 [COMMITMENT_DEBUG] addWithdrawal entry - parentCommitment:', {
+    hash: withdrawalParams.parentCommitment.hash,
+    label: withdrawalParams.parentCommitment.label,
+    value: withdrawalParams.parentCommitment.value,
+    hasNullifier:
+      !!withdrawalParams.parentCommitment.nullifier && String(withdrawalParams.parentCommitment.nullifier) !== '',
+    hasSecret: !!withdrawalParams.parentCommitment.secret && String(withdrawalParams.parentCommitment.secret) !== '',
+    newValue: withdrawalParams.value,
+    timestamp: new Date().toISOString(),
+  });
+
+  const result = accountService.addWithdrawalCommitment(
     withdrawalParams.parentCommitment,
     withdrawalParams.value,
     withdrawalParams.nullifier,
@@ -304,6 +316,19 @@ export const addWithdrawal = async (
     withdrawalParams.blockNumber,
     withdrawalParams.txHash,
   );
+
+  // CRITICAL DEBUG: Log parentCommitment after addWithdrawalCommitment
+  console.log('🔍 [COMMITMENT_DEBUG] addWithdrawal exit - parentCommitment after SDK call:', {
+    hash: withdrawalParams.parentCommitment.hash,
+    label: withdrawalParams.parentCommitment.label,
+    value: withdrawalParams.parentCommitment.value,
+    hasNullifier:
+      !!withdrawalParams.parentCommitment.nullifier && String(withdrawalParams.parentCommitment.nullifier) !== '',
+    hasSecret: !!withdrawalParams.parentCommitment.secret && String(withdrawalParams.parentCommitment.secret) !== '',
+    timestamp: new Date().toISOString(),
+  });
+
+  return result;
 };
 
 export const addRagequit = async (
@@ -390,14 +415,48 @@ export const getPoolAccountsFromAccount = async (account: PrivacyPoolAccount, ch
         transport: transports[Number(_chainId)],
       });
 
+      // CRITICAL DEBUG: Log deposit before timestamp assignment
+      console.log('🔍 [COMMITMENT_DEBUG] Before deposit timestamp assignment:', {
+        hash: updatedPoolAccount.deposit.hash,
+        hasNullifier: !!updatedPoolAccount.deposit.nullifier && String(updatedPoolAccount.deposit.nullifier) !== '',
+        hasSecret: !!updatedPoolAccount.deposit.secret && String(updatedPoolAccount.deposit.secret) !== '',
+        timestamp: new Date().toISOString(),
+      });
+
       updatedPoolAccount.deposit.timestamp = await getTimestampFromBlockNumber(
         poolAccount.deposit.blockNumber,
         publicClient,
       );
 
+      // CRITICAL DEBUG: Log deposit after timestamp assignment
+      console.log('🔍 [COMMITMENT_DEBUG] After deposit timestamp assignment:', {
+        hash: updatedPoolAccount.deposit.hash,
+        hasNullifier: !!updatedPoolAccount.deposit.nullifier && String(updatedPoolAccount.deposit.nullifier) !== '',
+        hasSecret: !!updatedPoolAccount.deposit.secret && String(updatedPoolAccount.deposit.secret) !== '',
+        timestamp: new Date().toISOString(),
+      });
+
       if (updatedPoolAccount.children.length > 0) {
-        updatedPoolAccount.children.forEach(async (child) => {
+        updatedPoolAccount.children.forEach(async (child, childIndex) => {
+          // CRITICAL DEBUG: Log child before timestamp assignment
+          console.log('🔍 [COMMITMENT_DEBUG] Before child timestamp assignment:', {
+            childIndex,
+            hash: child.hash,
+            hasNullifier: !!child.nullifier && String(child.nullifier) !== '',
+            hasSecret: !!child.secret && String(child.secret) !== '',
+            timestamp: new Date().toISOString(),
+          });
+
           child.timestamp = await getTimestampFromBlockNumber(child.blockNumber, publicClient);
+
+          // CRITICAL DEBUG: Log child after timestamp assignment
+          console.log('🔍 [COMMITMENT_DEBUG] After child timestamp assignment:', {
+            childIndex,
+            hash: child.hash,
+            hasNullifier: !!child.nullifier && String(child.nullifier) !== '',
+            hasSecret: !!child.secret && String(child.secret) !== '',
+            timestamp: new Date().toISOString(),
+          });
         });
       }
 

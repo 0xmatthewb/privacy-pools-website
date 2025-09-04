@@ -184,16 +184,46 @@ export const AccountProvider = ({ children }: Props) => {
     if (!accountServiceRef.current) throw new Error('Account service not found');
     setIsLoading(true);
 
-    const { poolAccounts, poolAccountsByChainScope } = await getPoolAccountsFromAccount(
+    // CRITICAL DEBUG: Log before account refresh
+    console.log('🔍 [COMMITMENT_DEBUG] handleUpdatePoolAccounts - BEFORE account refresh:', {
+      chainId: selectedPoolInfo.chainId,
+      currentPoolAccountsCount: poolAccounts.length,
+      currentPoolAccounts: poolAccounts.map((pa) => ({
+        name: pa.name,
+        lastCommitmentHash: pa.lastCommitment?.hash,
+        lastCommitmentHasNullifier: !!pa.lastCommitment?.nullifier && String(pa.lastCommitment.nullifier) !== '',
+        lastCommitmentHasSecret: !!pa.lastCommitment?.secret && String(pa.lastCommitment.secret) !== '',
+        balance: pa.balance.toString(),
+        childrenCount: pa.children?.length || 0,
+      })),
+      timestamp: new Date().toISOString(),
+    });
+
+    const { poolAccounts: newPoolAccounts, poolAccountsByChainScope } = await getPoolAccountsFromAccount(
       accountServiceRef.current.account,
       selectedPoolInfo.chainId,
     );
 
-    setPoolAccountsByChainScope(poolAccountsByChainScope);
-    setPoolAccounts(poolAccounts);
+    // CRITICAL DEBUG: Log after account refresh
+    console.log('🔍 [COMMITMENT_DEBUG] handleUpdatePoolAccounts - AFTER getPoolAccountsFromAccount:', {
+      chainId: selectedPoolInfo.chainId,
+      newPoolAccountsCount: newPoolAccounts.length,
+      newPoolAccounts: newPoolAccounts.map((pa) => ({
+        name: pa.name,
+        lastCommitmentHash: pa.lastCommitment?.hash,
+        lastCommitmentHasNullifier: !!pa.lastCommitment?.nullifier && String(pa.lastCommitment.nullifier) !== '',
+        lastCommitmentHasSecret: !!pa.lastCommitment?.secret && String(pa.lastCommitment.secret) !== '',
+        balance: pa.balance.toString(),
+        childrenCount: pa.children?.length || 0,
+      })),
+      timestamp: new Date().toISOString(),
+    });
 
-    fetchAndProcessDeposits(poolAccounts);
-  }, [fetchAndProcessDeposits, selectedPoolInfo.chainId]);
+    setPoolAccountsByChainScope(poolAccountsByChainScope);
+    setPoolAccounts(newPoolAccounts);
+
+    fetchAndProcessDeposits(newPoolAccounts);
+  }, [fetchAndProcessDeposits, selectedPoolInfo.chainId, poolAccounts]);
 
   const handleAddPoolAccount = useCallback(
     (...params: Parameters<typeof addPoolAccount>) => {
