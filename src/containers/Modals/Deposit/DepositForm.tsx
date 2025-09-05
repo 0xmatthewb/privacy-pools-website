@@ -26,7 +26,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatUnits, parseUnits, erc20Abi, encodeFunctionData } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
 import { getConstants } from '~/config/constants';
-import { useChainContext, useModal, usePoolAccountsContext, useStakingFeature } from '~/hooks';
+import { useChainContext, useModal, usePoolAccountsContext, useStakingFeature, useNotifications } from '~/hooks';
 import { ModalType } from '~/types';
 import { formatDataNumber, getUsdBalance, calculateAspFee, calculateInitialDeposit, entrypointAbi } from '~/utils';
 import { getStakedTokenPreview } from '~/utils/alternativeTokenDeposit';
@@ -39,6 +39,7 @@ const { ASP_OPTIONS } = getConstants();
 
 export const DepositForm = () => {
   const { setModalOpen } = useModal();
+  const { addNotification } = useNotifications();
   const [asp, setAsp] = useState(ASP_OPTIONS[0]);
   const { address } = useAccount();
   const publicClient = usePublicClient();
@@ -304,7 +305,65 @@ export const DepositForm = () => {
     }
   };
 
-  const handleDeposit = () => {
+  const handleDeposit = async () => {
+    // For ERC20 deposits, check if user has enough ETH for gas
+    if (selectedPoolInfo?.asset !== 'ETH' && !selectedPoolInfo?.isNativeToken) {
+      if (publicClient && address) {
+        try {
+          // Get ETH balance
+          const ethBalance = await publicClient.getBalance({ address });
+
+          // Get current gas price
+          const gasPrice = await publicClient.getGasPrice();
+
+          // Estimate gas for ERC20 deposit transactions
+          let gasEstimate: bigint;
+          const value = parseUnits(amount, decimals);
+
+          try {
+            // Estimate gas for approval transaction
+            const approvalGas = await publicClient.estimateGas({
+              account: address,
+              to: selectedPoolInfo.assetAddress as `0x${string}`,
+              data: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: 'approve',
+                args: [selectedPoolInfo.entryPointAddress, value],
+              }),
+            });
+
+            // Estimate gas for deposit transaction
+            const depositGas = await publicClient.estimateGas({
+              account: address,
+              to: selectedPoolInfo.entryPointAddress as `0x${string}`,
+              data: encodeFunctionData({
+                abi: entrypointAbi,
+                functionName: 'deposit',
+                args: [selectedPoolInfo.assetAddress, value, BigInt('0x' + '1'.repeat(64))], // dummy precommitment
+              }),
+            });
+
+            // Total gas for both transactions
+            gasEstimate = approvalGas + depositGas;
+          } catch {
+            // Fallback gas estimate if estimation fails
+            gasEstimate = 200000n; // Conservative estimate for approval + deposit
+          }
+
+          // Add 50% buffer to gas estimate for safety
+          const totalGasCost = ((gasEstimate * 150n) / 100n) * gasPrice;
+
+          if (ethBalance < totalGasCost) {
+            addNotification('error', 'Insufficient ETH balance to pay for gas fees');
+            return null;
+          }
+        } catch (error) {
+          console.error('Error checking ETH balance:', error);
+          // Continue with deposit if check fails
+        }
+      }
+    }
+
     setModalOpen(ModalType.REVIEW);
   };
 
