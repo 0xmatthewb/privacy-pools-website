@@ -26,7 +26,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatUnits, parseUnits, erc20Abi, encodeFunctionData } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
 import { getConstants } from '~/config/constants';
-import { useChainContext, useModal, usePoolAccountsContext, useStakingFeature } from '~/hooks';
+import { useChainContext, useModal, usePoolAccountsContext, useStakingFeature, useNotifications } from '~/hooks';
 import { ModalType } from '~/types';
 import { formatDataNumber, getUsdBalance, calculateAspFee, calculateInitialDeposit, entrypointAbi } from '~/utils';
 import { getStakedTokenPreview } from '~/utils/alternativeTokenDeposit';
@@ -39,6 +39,7 @@ const { ASP_OPTIONS } = getConstants();
 
 export const DepositForm = () => {
   const { setModalOpen } = useModal();
+  const { addNotification } = useNotifications();
   const [asp, setAsp] = useState(ASP_OPTIONS[0]);
   const { address } = useAccount();
   const publicClient = usePublicClient();
@@ -304,7 +305,34 @@ export const DepositForm = () => {
     }
   };
 
-  const handleDeposit = () => {
+  const handleDeposit = async () => {
+    // For ERC20 deposits, check if user has enough ETH for gas
+    if (selectedPoolInfo?.asset !== 'ETH' && !selectedPoolInfo?.isNativeToken) {
+      if (publicClient && address) {
+        try {
+          // Get ETH balance
+          const ethBalance = await publicClient.getBalance({ address });
+
+          // Estimate gas cost for ERC20 deposit (approval + deposit)
+          // Using conservative estimate of 200k gas units
+          const gasPrice = await publicClient.getGasPrice();
+          const estimatedGasUnits = 200000n;
+          const estimatedGasCost = gasPrice * estimatedGasUnits;
+
+          // Add 20% buffer for safety
+          const requiredEth = (estimatedGasCost * 120n) / 100n;
+
+          if (ethBalance < requiredEth) {
+            addNotification('error', 'Insufficient ETH balance to pay for gas fees');
+            return null;
+          }
+        } catch (error) {
+          console.error('Error checking ETH balance:', error);
+          // Continue with deposit if check fails
+        }
+      }
+    }
+
     setModalOpen(ModalType.REVIEW);
   };
 
