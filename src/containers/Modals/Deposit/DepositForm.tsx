@@ -313,16 +313,47 @@ export const DepositForm = () => {
           // Get ETH balance
           const ethBalance = await publicClient.getBalance({ address });
 
-          // Estimate gas cost for ERC20 deposit (approval + deposit)
-          // Using conservative estimate of 200k gas units
+          // Get current gas price
           const gasPrice = await publicClient.getGasPrice();
-          const estimatedGasUnits = 200000n;
-          const estimatedGasCost = gasPrice * estimatedGasUnits;
 
-          // Add 20% buffer for safety
-          const requiredEth = (estimatedGasCost * 120n) / 100n;
+          // Estimate gas for ERC20 deposit transactions
+          let gasEstimate: bigint;
+          const value = parseUnits(amount, decimals);
 
-          if (ethBalance < requiredEth) {
+          try {
+            // Estimate gas for approval transaction
+            const approvalGas = await publicClient.estimateGas({
+              account: address,
+              to: selectedPoolInfo.assetAddress as `0x${string}`,
+              data: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: 'approve',
+                args: [selectedPoolInfo.entryPointAddress, value],
+              }),
+            });
+
+            // Estimate gas for deposit transaction
+            const depositGas = await publicClient.estimateGas({
+              account: address,
+              to: selectedPoolInfo.entryPointAddress as `0x${string}`,
+              data: encodeFunctionData({
+                abi: entrypointAbi,
+                functionName: 'deposit',
+                args: [selectedPoolInfo.assetAddress, value, BigInt('0x' + '1'.repeat(64))], // dummy precommitment
+              }),
+            });
+
+            // Total gas for both transactions
+            gasEstimate = approvalGas + depositGas;
+          } catch {
+            // Fallback gas estimate if estimation fails
+            gasEstimate = 200000n; // Conservative estimate for approval + deposit
+          }
+
+          // Add 50% buffer to gas estimate for safety
+          const totalGasCost = ((gasEstimate * 150n) / 100n) * gasPrice;
+
+          if (ethBalance < totalGasCost) {
             addNotification('error', 'Insufficient ETH balance to pay for gas fees');
             return null;
           }
