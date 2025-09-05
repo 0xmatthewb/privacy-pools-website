@@ -127,6 +127,24 @@ export const useDeposit = () => {
           // ERC-20 token deposits - check for EIP-7702 batching support
           if (!selectedPoolInfo.assetAddress) throw new Error('Asset address missing for token deposit');
 
+          // Check ETH balance for gas fees - disable batching if insufficient ETH
+          const ethBalance = await publicClient.getBalance({ address });
+          const gasPrice = await publicClient.getGasPrice();
+
+          // Estimate minimum gas needed (conservative estimate)
+          const minGasNeeded = 300000n; // More conservative estimate for batched transactions
+          const minGasCost = ((minGasNeeded * 200n) / 100n) * gasPrice; // 100% buffer for safety
+
+          // Never batch if user has zero ETH or insufficient ETH for gas
+          const hasInsufficientEthForBatching = ethBalance === 0n || ethBalance < minGasCost;
+
+          console.log('ETH Balance Check:', {
+            ethBalance: ethBalance.toString(),
+            minGasCost: minGasCost.toString(),
+            hasInsufficientEthForBatching,
+            gasPrice: gasPrice.toString(),
+          });
+
           // Check for batching support (MetaMask Smart Account or Safe)
 
           // Check for Safe App environment using React SDK
@@ -135,7 +153,7 @@ export const useDeposit = () => {
           const supportsEIP7702 = await supportsEIP7702Batching(address, chainId);
 
           // Safe App batching path - prioritize Safe Apps SDK over legacy detection
-          if (isSafeApp && (assetAllowance < value || selectedAlternativeToken)) {
+          if (!hasInsufficientEthForBatching && isSafeApp && (assetAllowance < value || selectedAlternativeToken)) {
             if (selectedAlternativeToken) {
               addNotification('info', 'Using Safe App - batching USDS staking + sUSDS deposit...');
 
@@ -248,7 +266,11 @@ export const useDeposit = () => {
             }
           }
           // MetaMask Smart Account batching path
-          else if (supportsEIP7702 && (assetAllowance < value || selectedAlternativeToken)) {
+          else if (
+            !hasInsufficientEthForBatching &&
+            supportsEIP7702 &&
+            (assetAllowance < value || selectedAlternativeToken)
+          ) {
             if (selectedAlternativeToken) {
               // Alternative token staking flow
               addNotification(
@@ -410,6 +432,13 @@ export const useDeposit = () => {
             }
           } else {
             // Standard flow - check allowance and approve if needed
+            if (hasInsufficientEthForBatching && (assetAllowance < value || selectedAlternativeToken)) {
+              addNotification(
+                'info',
+                'Insufficient ETH for batching - using separate approval and deposit transactions...',
+              );
+            }
+
             if (assetAllowance < value) {
               addNotification('info', 'Allowance insufficient. Requesting approval...');
               const approveHash = await walletClient.writeContract({

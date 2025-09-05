@@ -354,8 +354,9 @@ export const DepositForm = () => {
           const totalGasCost = ((gasEstimate * 150n) / 100n) * gasPrice;
 
           if (ethBalance < totalGasCost) {
-            addNotification('error', 'Insufficient ETH balance to pay for gas fees');
-            return null;
+            // User has insufficient ETH but MetaMask gas station may sponsor
+            // Just show info notification, don't block the deposit
+            addNotification('info', 'Low ETH balance detected - deposit may use gas sponsoring');
           }
         } catch (error) {
           console.error('Error checking ETH balance:', error);
