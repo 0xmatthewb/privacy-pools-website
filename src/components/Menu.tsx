@@ -19,6 +19,7 @@ import { useSignTypedData, useAccount, useEnsName, useEnsAvatar } from 'wagmi';
 import { useGoTo, useChainContext, useAuthContext, useAccountContext } from '~/hooks';
 import {
   deriveMnemonicFromWalletSignature,
+  buildSeedDerivationTypedData,
   formatDataNumber,
   getUsdBalance,
   ROUTER,
@@ -100,16 +101,8 @@ export const Menu = () => {
       let mnemonic = '';
 
       if (signupMethod === 'wallet') {
-        // Use EIP-712 typed data signature for all wallets
-        const domain = { name: 'Privacy Pools', version: '1' } as const;
-        const types = {
-          DeriveSeed: [
-            { name: 'action', type: 'string' },
-            { name: 'context', type: 'string' },
-          ],
-        } as const;
-        const message = { action: 'Derive Account Seed', context: 'privacy-pools/wallet-seed:v1' } as const;
-        const signature = await signTypedDataAsync({ domain, types, primaryType: 'DeriveSeed', message });
+        const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address);
+        const signature = await signTypedDataAsync({ domain, types, primaryType, message });
 
         // Debug: Log signature details
         console.log('Download signature debug:');

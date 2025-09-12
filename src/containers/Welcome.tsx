@@ -7,7 +7,7 @@ import { useAccount, useSignTypedData } from 'wagmi';
 import { CloseButton } from '~/components';
 import { useGoTo, useModal, useAccountContext, useAuthContext, useNotifications } from '~/hooks';
 import { ModalType } from '~/types';
-import { ROUTER, deriveMnemonicFromWalletSignature } from '~/utils';
+import { ROUTER, deriveMnemonicFromWalletSignature, buildSeedDerivationTypedData } from '~/utils';
 
 export const Welcome = () => {
   const goTo = useGoTo();
@@ -40,16 +40,9 @@ export const Welcome = () => {
       }
       setIsGenerating(true);
 
-      // Use EIP-712 typed data signature for all wallets
-      const domain = { name: 'Privacy Pools', version: '1' } as const;
-      const types = {
-        DeriveSeed: [
-          { name: 'action', type: 'string' },
-          { name: 'context', type: 'string' },
-        ],
-      } as const;
-      const message = { action: 'Derive Account Seed', context: 'privacy-pools/wallet-seed:v1' } as const;
-      const signature = await signTypedDataAsync({ domain, types, primaryType: 'DeriveSeed', message });
+      // Use standardized EIP-712 payload that commits to addressHash
+      const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address);
+      const signature = await signTypedDataAsync({ domain, types, primaryType, message });
 
       // Debug: Log signature details
       console.log('Wallet signature debug:');
