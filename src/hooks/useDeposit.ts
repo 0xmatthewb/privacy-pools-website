@@ -248,7 +248,7 @@ export const useDeposit = () => {
             }
           }
           // MetaMask Smart Account batching path
-          else if (supportsEIP7702 && (assetAllowance < value || selectedAlternativeToken)) {
+          else if (supportsEIP7702 && (assetAllowance < value || selectedAlternativeToken) && false) {
             if (selectedAlternativeToken) {
               // Alternative token staking flow
               addNotification(
