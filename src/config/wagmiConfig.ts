@@ -8,7 +8,7 @@ import {
   coinbaseWallet,
   metaMaskWallet,
 } from '@rainbow-me/rainbowkit/wallets';
-import { porto } from 'porto/wagmi';
+//import { porto } from 'porto/wagmi';
 import { HttpTransport } from 'viem';
 import { mainnet, type Chain } from 'viem/chains';
 import { createConfig, http } from 'wagmi';
@@ -57,8 +57,7 @@ export const transports = allChains.reduce(
   {} as Record<number, HttpTransport>,
 );
 
-// Add Porto first for discover-accounts UX, then others, Safe last
-const allConnectors = [porto(), ...connectors, safe()];
+const allConnectors = [/* remove Porto for now porto(),*/ ...connectors, safe()];
 
 export const defaultConfig = createConfig({
   chains: allChains,
