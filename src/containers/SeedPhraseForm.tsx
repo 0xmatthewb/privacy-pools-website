@@ -34,6 +34,7 @@ export const SeedPhraseForm = ({
   showInputs = false,
   hideActions = false,
   onMethodChange,
+  initialSetupMode = 'initial',
 }: {
   seedPhrase: string;
   setSeedPhrase: (seedPhrase: string) => void;
@@ -43,6 +44,7 @@ export const SeedPhraseForm = ({
   showInputs?: boolean;
   hideActions?: boolean;
   onMethodChange?: (method: 'wallet' | 'manual') => void;
+  initialSetupMode?: 'initial' | 'manual';
 }) => {
   const [isHidden, setIsHidden] = useState(true);
   const [splitSeedPhrase, setSplitSeedPhrase] = useState<string[]>([]);
@@ -56,7 +58,7 @@ export const SeedPhraseForm = ({
   const { copied: isCopied, copyToClipboard: copyToClipboardUtil, readFromClipboard } = useClipboard({ timeout: 3000 });
   const [isGenerating, setIsGenerating] = useState(false);
   const [skippedVerification, setSkippedVerification] = useState(false);
-  const [setupMode, setSetupMode] = useState<'initial' | 'manual'>('initial');
+  const [setupMode, setSetupMode] = useState<'initial' | 'manual'>(initialSetupMode);
   const [walletSelected, setWalletSelected] = useState(false);
   const { address } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();

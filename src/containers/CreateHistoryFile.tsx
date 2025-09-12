@@ -183,6 +183,7 @@ export const CreateHistoryFile = () => {
           setSeedPhrase={setSeedPhrase}
           onEnterKey={handleEnterKey}
           onVerificationComplete={handleVerificationComplete}
+          initialSetupMode='manual'
           showInputs={showSeedPhraseInputs}
           hideActions={(authMethod === 'wallet' || authMethod === 'passkey') && !showSeedPhraseInputs}
           onMethodChange={handleMethodChange}
