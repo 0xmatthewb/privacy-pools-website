@@ -2,10 +2,14 @@
 
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Porto } from 'porto';
 import { WagmiProvider } from 'wagmi';
 import { config } from '~/config/wagmiConfig';
 
 import '@rainbow-me/rainbowkit/styles.css';
+
+// Initialize Porto for wallet discovery
+Porto.create();
 
 type Props = {
   children: React.ReactNode;
