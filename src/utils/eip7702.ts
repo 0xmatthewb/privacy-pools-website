@@ -60,6 +60,16 @@ interface EthereumProvider {
  */
 export const checkBatchingCapability = async (address: Address, chainId: number): Promise<boolean> => {
   try {
+    // Whitelist of chains that support EIP-7702 batching
+    const supportedChains = [
+      1, // Ethereum mainnet
+      11155111, // Ethereum Sepolia
+    ];
+
+    if (!supportedChains.includes(chainId)) {
+      return false;
+    }
+
     const ethereum = window.ethereum as EthereumProvider | undefined;
     if (!ethereum) {
       return false;
