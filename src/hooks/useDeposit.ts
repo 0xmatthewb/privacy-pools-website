@@ -47,7 +47,7 @@ export const useDeposit = () => {
   const { amount, setTransactionHash, vettingFeeBPS, selectedAlternativeToken } = usePoolAccountsContext();
   const [isLoading, setIsLoading] = useState(false);
   const { accountService, poolAccounts, addPoolAccount } = useAccountContext();
-  const { data: walletClient, refetch: refetchWalletClient } = useWalletClient({ chainId });
+  const { data: walletClient } = useWalletClient({ chainId });
   const publicClient = usePublicClient({ chainId });
   const { isSafeApp, createSafeBatchTransaction, sendSafeBatchTransaction, waitForSafeTransaction } =
     useSafeTransactions();
@@ -68,17 +68,8 @@ export const useDeposit = () => {
       setIsLoading(true);
 
       // Only switch chain if not already on the correct chain and not using Safe
-      let wc = walletClient;
-      if (!isSafeApp && wc?.chain?.id !== chainId) {
+      if (!isSafeApp && walletClient?.chain?.id !== chainId) {
         await switchChainAsync({ chainId });
-        // After switching chain, refetch wallet client so it is available on first attempt
-        const refreshed = await refetchWalletClient();
-        wc = refreshed.data ?? wc;
-      }
-      // If wallet client is still not ready (e.g., first render), try a one-time refetch
-      if (!wc) {
-        const refreshed = await refetchWalletClient();
-        wc = refreshed.data ?? wc;
       }
 
       if (!accountService) throw new Error('AccountService not found');
@@ -105,7 +96,7 @@ export const useDeposit = () => {
       const value = parseUnits(amount, decimals);
 
       if (!TEST_MODE) {
-        if (!publicClient || (!isSafeApp && !wc)) throw new Error('Wallet or Public client not found');
+        if (!walletClient || !publicClient) throw new Error('Wallet or Public client not found');
 
         if (!selectedPoolInfo.scope || !precommitmentHash || !value)
           throw new Error('Missing required data to deposit');
@@ -131,7 +122,7 @@ export const useDeposit = () => {
             });
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { account: _account, ...restRequest } = request;
-          hash = await wc!.writeContract(restRequest);
+          hash = await walletClient.writeContract(restRequest);
         } else {
           // ERC-20 token deposits - check for EIP-7702 batching support
           if (!selectedPoolInfo.assetAddress) throw new Error('Asset address missing for token deposit');
@@ -421,7 +412,7 @@ export const useDeposit = () => {
             // Standard flow - check allowance and approve if needed
             if (assetAllowance < value) {
               addNotification('info', 'Allowance insufficient. Requesting approval...');
-              const approveHash = await wc!.writeContract({
+              const approveHash = await walletClient.writeContract({
                 address: selectedPoolInfo.assetAddress,
                 abi: erc20Abi,
                 functionName: 'approve',
@@ -452,7 +443,7 @@ export const useDeposit = () => {
               });
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { account: _account, ...restRequest } = request;
-            hash = await wc!.writeContract(restRequest);
+            hash = await walletClient.writeContract(restRequest);
           }
         }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { MouseEvent, useRef, useState } from 'react';
-import { Checkmark, Copy, Download, Logout, Menu as MenuIcon, Wallet } from '@carbon/icons-react';
+import { Checkmark, Copy, Logout, Menu as MenuIcon, Wallet } from '@carbon/icons-react';
 import {
   ListItemIcon,
   Menu as MuiMenu,
@@ -13,19 +13,10 @@ import {
   useTheme,
   Avatar,
 } from '@mui/material';
-import { captureException } from '@sentry/nextjs';
 import { formatUnits } from 'viem';
-import { useSignTypedData, useAccount, useEnsName, useEnsAvatar } from 'wagmi';
-import { useGoTo, useChainContext, useAuthContext, useAccountContext } from '~/hooks';
-import {
-  deriveMnemonicFromWalletSignature,
-  formatDataNumber,
-  getUsdBalance,
-  ROUTER,
-  truncateAddress,
-  zIndex,
-  useClipboard,
-} from '~/utils';
+import { useAccount, useEnsName, useEnsAvatar } from 'wagmi';
+import { useGoTo, useChainContext, useAuthContext } from '~/hooks';
+import { formatDataNumber, getUsdBalance, ROUTER, truncateAddress, zIndex, useClipboard } from '~/utils';
 
 export const Menu = () => {
   const { address } = useAccount();
@@ -45,15 +36,8 @@ export const Menu = () => {
     balanceBN: { value, symbol, decimals },
   } = useChainContext();
   const { logout } = useAuthContext();
-  const { seed } = useAccountContext();
   const { copied, copyToClipboard } = useClipboard({ timeout: 1400 });
-  const [isDownloading, setIsDownloading] = useState(false);
-  const { signTypedDataAsync } = useSignTypedData();
   const theme = useTheme();
-
-  // Get signup method from localStorage
-  const signupMethod = typeof window !== 'undefined' ? localStorage.getItem('signupMethod') : null;
-  const canDownloadSeedphrase = signupMethod === 'wallet';
 
   const ethBalanceBN = value.toString() ?? '0';
   const balance = formatDataNumber(ethBalanceBN, decimals, 2, false, false, false);
@@ -92,53 +76,6 @@ export const Menu = () => {
     }
   };
 
-  const handleDownloadSeedPhrase = async () => {
-    if (!seed || !address) return;
-
-    try {
-      setIsDownloading(true);
-      let mnemonic = '';
-
-      if (signupMethod === 'wallet') {
-        // Use EIP-712 typed data signature for all wallets
-        const domain = { name: 'Privacy Pools', version: '1' } as const;
-        const types = {
-          DeriveSeed: [
-            { name: 'action', type: 'string' },
-            { name: 'context', type: 'string' },
-          ],
-        } as const;
-        const message = { action: 'Derive Account Seed', context: 'privacy-pools/wallet-seed:v1' } as const;
-        const signature = await signTypedDataAsync({ domain, types, primaryType: 'DeriveSeed', message });
-
-        // Debug: Log signature details
-        console.log('Download signature debug:');
-        console.log('- Wallet address:', address);
-        console.log('- Signature length:', signature.length);
-        console.log('- Signature:', signature);
-
-        mnemonic = await deriveMnemonicFromWalletSignature(signature, address!);
-      }
-
-      // Download the seedphrase
-      const content = `Privacy Pools Recovery Phrase\n\nWallet Address: ${address}\n\nRecovery Phrase:\n${mnemonic}\n\nIMPORTANT: Keep this file secure and never share it with anyone.\nThis phrase is the ONLY way to recover your account if you lose access.`;
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `privacy-pools-recovery-${address}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-      captureException(err, { tags: { stage: 'download_seedphrase' } });
-    } finally {
-      setIsDownloading(false);
-    }
-
-    handleClose();
-  };
-
   return (
     <>
       <SIconButton ref={buttonRef} open={open} onClick={handleToggle} data-testid='account-menu-button'>
@@ -173,15 +110,6 @@ export const Menu = () => {
             <Copy size={16} color={theme.palette.text.disabled} />
           )}
         </SMenuItem>
-
-        {seed && canDownloadSeedphrase && (
-          <SMenuItem onClick={handleDownloadSeedPhrase} disabled={isDownloading}>
-            <ListItemIcon>
-              <Download size={16} />
-            </ListItemIcon>
-            {isDownloading ? 'Authenticating...' : 'Download Recovery Phrase'}
-          </SMenuItem>
-        )}
 
         <SMenuItem onClick={handleLogout}>
           <ListItemIcon>

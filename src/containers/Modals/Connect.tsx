@@ -14,21 +14,7 @@ export const ConnectModal = () => {
   const { closeModal } = useModal();
   const goTo = useGoTo();
 
-  // Reusable connector type with optional RainbowKit display metadata
-  type ConnectorWithName = Connector<CreateConnectorFn> & { rkDetails?: { name?: string }; name?: string };
-
   const uniqueConnectors = useMemo(() => getUniqueConnectors(availableConnectors), [availableConnectors]);
-  // Resolve display name without relying on non-typed fields
-  const getConnectorDisplayName = (connector: ConnectorWithName) => {
-    return connector?.rkDetails?.name || connector?.name || '';
-  };
-  // Prefer Porto connector first for the "Sign in with" flow
-  const portoConnector = useMemo(() => {
-    return uniqueConnectors.find((connector) => {
-      const displayName = getConnectorDisplayName(connector as ConnectorWithName).toLowerCase();
-      return connector.id === 'porto' || displayName.includes('porto');
-    });
-  }, [uniqueConnectors]);
 
   const handleConnect = async (connector: Connector<CreateConnectorFn>) => {
     await customConnect(connector);
@@ -60,31 +46,17 @@ export const ConnectModal = () => {
             </SButton>
           )}
 
-          {uniqueConnectors
-            .filter((connector) => connector.uid !== portoConnector?.uid)
-            .map((connector) => (
-              <SButton
-                key={connector.uid}
-                fullWidth
-                onClick={() => handleConnect(connector)}
-                data-testid={`wallet-option-${connector.id}`}
-                variant={isSafeApp ? 'outlined' : 'contained'}
-              >
-                {getConnectorDisplayName(connector as ConnectorWithName)}
-              </SButton>
-            ))}
-          {!isSafeApp && portoConnector && (
+          {uniqueConnectors.map((connector) => (
             <SButton
-              key={portoConnector.uid}
+              key={connector.uid}
               fullWidth
-              onClick={() => handleConnect(portoConnector)}
-              data-testid={`wallet-option-${portoConnector.id}`}
-              variant='contained'
-              color='primary'
+              onClick={() => handleConnect(connector)}
+              data-testid={`wallet-option-${connector.id}`}
+              variant={isSafeApp ? 'outlined' : 'contained'}
             >
-              {getConnectorDisplayName(portoConnector as ConnectorWithName)}
+              {(connector as { rkDetails?: { name?: string } })?.rkDetails?.name || connector.name}
             </SButton>
-          )}
+          ))}
         </Stack>
       </ModalContainer>
     </SModal>

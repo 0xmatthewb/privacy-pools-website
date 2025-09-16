@@ -1,7 +1,7 @@
 import { AbiEvent, Address, getAddress } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { LeafInsertedLog } from '~/types';
-import { leafInserted, scope } from '~/utils/abi';
+import { leafInserted, scope } from '~/utils';
 
 export const getScope = async (publicClient: ReturnType<typeof usePublicClient>, poolAddress: Address) => {
   const poolScope = (await publicClient?.readContract({
