@@ -16,7 +16,7 @@ export const Welcome = () => {
   const { address } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const { setModalOpen } = useModal();
-  const { createAccount, setSeed } = useAccountContext();
+  const { setSeed, loadAccount } = useAccountContext();
   const { login } = useAuthContext();
   const { addNotification } = useNotifications();
 
@@ -52,8 +52,8 @@ export const Welcome = () => {
 
       const mnemonic = await deriveMnemonicFromWalletSignature(signature, address);
 
-      // Create account and login
-      createAccount(mnemonic);
+      // Load account (which will also create if new) to ensure existing pool accounts are loaded
+      await loadAccount(mnemonic);
       setSeed(mnemonic);
 
       // Track signup method for security purposes
