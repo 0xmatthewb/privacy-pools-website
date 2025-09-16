@@ -28,12 +28,12 @@ export async function POST(request: NextRequest) {
     const hypersyncUrls: Record<string, string> = {
       '1': `https://eth.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // Mainnet
       '11155111': `https://sepolia.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // Sepolia
-      '11155420': `https://optimism-sepolia.hypersync.xyz/${HYPERSYNC_KEY}`, // OP Sepolia
-      '10': `https://optimism.hypersync.xyz/${HYPERSYNC_KEY}`, // OP
-      '8453': `https://base.hypersync.xyz/${HYPERSYNC_KEY}`, // Base
-      '84532': `https://base-sepolia.hypersync.xyz/${HYPERSYNC_KEY}`, // Base Sepolia
-      '42161': `https://arbitrum.hypersync.xyz/${HYPERSYNC_KEY}`, // arbitrum
-      '421614': `https://arbitrum-sepolia.hypersync.xyz/${HYPERSYNC_KEY}`, // arbitrum-sepolia
+      '11155420': `https://optimism-sepolia.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // OP Sepolia
+      '10': `https://optimism.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // OP
+      '8453': `https://base.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // Base
+      '84532': `https://base-sepolia.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // Base Sepolia
+      '42161': `https://arbitrum.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // arbitrum
+      '421614': `https://arbitrum-sepolia.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // arbitrum-sepolia
     };
 
     const hypersyncUrl = hypersyncUrls[chainId];
