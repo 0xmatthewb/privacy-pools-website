@@ -150,8 +150,8 @@ export const useDeposit = () => {
 
               // Check if user has enough USDS
               const hasEnoughBalance = await checkAlternativeTokenBalance(
-                selectedAlternativeToken.tokenAddress,
-                address,
+                selectedAlternativeToken!.tokenAddress,
+                address!,
                 value,
                 publicClient!,
               );
@@ -161,13 +161,13 @@ export const useDeposit = () => {
               }
 
               // Get preview of sUSDS shares
-              await getStakedTokenPreview(selectedAlternativeToken, value, publicClient!);
+              await getStakedTokenPreview(selectedAlternativeToken!, value, publicClient!);
 
               // Create alternative token deposit batch (approve USDS, stake, approve sUSDS)
               const { calls: alternativeBatch, expectedStakedAmount } = await createAlternativeTokenDepositBatch(
-                selectedAlternativeToken,
+                selectedAlternativeToken!,
                 value,
-                address,
+                address!,
                 selectedPoolInfo.entryPointAddress,
                 precommitmentHash,
                 publicClient!,
@@ -267,8 +267,8 @@ export const useDeposit = () => {
 
               // Check if user has enough USDS
               const hasEnoughBalance = await checkAlternativeTokenBalance(
-                selectedAlternativeToken.tokenAddress,
-                address,
+                selectedAlternativeToken!.tokenAddress,
+                address!,
                 value,
                 publicClient!,
               );
@@ -278,13 +278,13 @@ export const useDeposit = () => {
               }
 
               // Get preview of sUSDS shares
-              await getStakedTokenPreview(selectedAlternativeToken, value, publicClient!);
+              await getStakedTokenPreview(selectedAlternativeToken!, value, publicClient!);
 
               // Create alternative token deposit batch (approve USDS, stake, approve sUSDS)
               const { calls: alternativeBatch, expectedStakedAmount } = await createAlternativeTokenDepositBatch(
-                selectedAlternativeToken,
+                selectedAlternativeToken!,
                 value,
-                address,
+                address!,
                 selectedPoolInfo.entryPointAddress,
                 precommitmentHash,
                 publicClient!,
@@ -314,7 +314,7 @@ export const useDeposit = () => {
               ];
 
               // Send batch transaction using MetaMask Smart Account API
-              const batchId = await sendBatchTransaction(batchCalls, address, chainId);
+              const batchId = await sendBatchTransaction(batchCalls, address!, chainId);
 
               addNotification('info', 'Batch transaction with staking submitted, waiting for confirmation...');
 
@@ -371,7 +371,7 @@ export const useDeposit = () => {
               );
 
               // Send batch transaction using MetaMask Smart Account API
-              const batchId = await sendBatchTransaction(batchCalls, address, chainId);
+              const batchId = await sendBatchTransaction(batchCalls, address!, chainId);
 
               addNotification('info', 'Batch transaction submitted, waiting for confirmation...');
 

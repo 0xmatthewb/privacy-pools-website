@@ -13,17 +13,8 @@ describe('wallet-derived mnemonic determinism', () => {
     const privateKey = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     const account = privateKeyToAccount(privateKey);
 
-    const domain = { name: 'Privacy Pools', version: '1' } as const;
-    const types = {
-      DeriveSeed: [
-        { name: 'action', type: 'string' },
-        { name: 'context', type: 'string' },
-      ],
-    } as const;
-    const message = {
-      action: 'Derive Account Seed',
-      context: 'privacy-pools/wallet-seed:v1',
-    } as const;
+    const { buildSeedDerivationTypedData } = await import('~/utils/walletSeed');
+    const { domain, types, primaryType, message } = buildSeedDerivationTypedData(account.address);
 
     // Ensure Web Crypto is available before importing module under test
     Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
@@ -31,12 +22,7 @@ describe('wallet-derived mnemonic determinism', () => {
 
     const mnemonics: string[] = [];
     for (let i = 0; i < 50; i++) {
-      const signature = await account.signTypedData({
-        domain,
-        types,
-        primaryType: 'DeriveSeed',
-        message,
-      });
+      const signature = await account.signTypedData({ domain, types, primaryType, message });
       const mnemonic = await deriveMnemonicFromWalletSignature(signature, account.address);
       mnemonics.push(mnemonic);
     }

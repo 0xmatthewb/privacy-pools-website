@@ -24,9 +24,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Map chainId to Hypersync endpoint
+    // source: https://docs.envio.dev/docs/HyperSync/hypersync-supported-networks
     const hypersyncUrls: Record<string, string> = {
       '1': `https://eth.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // Mainnet
       '11155111': `https://sepolia.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // Sepolia
+      '11155420': `https://optimism-sepolia.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // OP Sepolia
+      '10': `https://optimism.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // OP
+      '8453': `https://base.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // Base
+      '84532': `https://base-sepolia.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // Base Sepolia
+      '42161': `https://arbitrum.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // arbitrum
+      '421614': `https://arbitrum-sepolia.rpc.hypersync.xyz/${HYPERSYNC_KEY}`, // arbitrum-sepolia
     };
 
     const hypersyncUrl = hypersyncUrls[chainId];

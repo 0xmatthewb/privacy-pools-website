@@ -109,6 +109,7 @@ export const LoadHistoryFile = () => {
         seedPhrase={seedPhrase}
         setSeedPhrase={handleSetSeedPhrase}
         onEnterKey={handleEnterKey}
+        initialSetupMode='manual'
         hideActions={authMethod === 'wallet' || authMethod === 'passkey'}
         onMethodChange={handleMethodChange}
       />

@@ -22,6 +22,7 @@ export const ConnectModal = () => {
   const getConnectorDisplayName = (connector: ConnectorWithName) => {
     return connector?.rkDetails?.name || connector?.name || '';
   };
+  /*
   // Prefer Porto connector first for the "Sign in with" flow
   const portoConnector = useMemo(() => {
     return uniqueConnectors.find((connector) => {
@@ -29,7 +30,7 @@ export const ConnectModal = () => {
       return connector.id === 'porto' || displayName.includes('porto');
     });
   }, [uniqueConnectors]);
-
+*/
   const handleConnect = async (connector: Connector<CreateConnectorFn>) => {
     await customConnect(connector);
     goTo(ROUTER.account.base);
@@ -60,20 +61,19 @@ export const ConnectModal = () => {
             </SButton>
           )}
 
-          {uniqueConnectors
-            .filter((connector) => connector.uid !== portoConnector?.uid)
-            .map((connector) => (
-              <SButton
-                key={connector.uid}
-                fullWidth
-                onClick={() => handleConnect(connector)}
-                data-testid={`wallet-option-${connector.id}`}
-                variant={isSafeApp ? 'outlined' : 'contained'}
-              >
-                {getConnectorDisplayName(connector as ConnectorWithName)}
-              </SButton>
-            ))}
-          {!isSafeApp && portoConnector && (
+          {uniqueConnectors.map((connector) => (
+            <SButton
+              key={connector.uid}
+              fullWidth
+              onClick={() => handleConnect(connector)}
+              data-testid={`wallet-option-${connector.id}`}
+              variant={isSafeApp ? 'outlined' : 'contained'}
+            >
+              {getConnectorDisplayName(connector as ConnectorWithName)}
+            </SButton>
+          ))}
+          {/**remove porto for now
+            !isSafeApp && portoConnector && (
             <SButton
               key={portoConnector.uid}
               fullWidth
@@ -84,7 +84,7 @@ export const ConnectModal = () => {
             >
               {getConnectorDisplayName(portoConnector as ConnectorWithName)}
             </SButton>
-          )}
+          )*/}
         </Stack>
       </ModalContainer>
     </SModal>

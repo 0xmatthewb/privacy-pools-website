@@ -21,7 +21,7 @@ import { english, generateMnemonic } from 'viem/accounts';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { useModal } from '~/hooks';
 import { ModalType } from '~/types';
-import { useClipboard, deriveMnemonicFromWalletSignature } from '~/utils';
+import { useClipboard, deriveMnemonicFromWalletSignature, buildSeedDerivationTypedData } from '~/utils';
 
 const arrOfKeys = generateMnemonic(english).split(' '); // 12 words
 
@@ -34,6 +34,7 @@ export const SeedPhraseForm = ({
   showInputs = false,
   hideActions = false,
   onMethodChange,
+  initialSetupMode = 'initial',
 }: {
   seedPhrase: string;
   setSeedPhrase: (seedPhrase: string) => void;
@@ -43,6 +44,7 @@ export const SeedPhraseForm = ({
   showInputs?: boolean;
   hideActions?: boolean;
   onMethodChange?: (method: 'wallet' | 'manual') => void;
+  initialSetupMode?: 'initial' | 'manual';
 }) => {
   const [isHidden, setIsHidden] = useState(true);
   const [splitSeedPhrase, setSplitSeedPhrase] = useState<string[]>([]);
@@ -56,7 +58,7 @@ export const SeedPhraseForm = ({
   const { copied: isCopied, copyToClipboard: copyToClipboardUtil, readFromClipboard } = useClipboard({ timeout: 3000 });
   const [isGenerating, setIsGenerating] = useState(false);
   const [skippedVerification, setSkippedVerification] = useState(false);
-  const [setupMode, setSetupMode] = useState<'initial' | 'manual'>('initial');
+  const [setupMode, setSetupMode] = useState<'initial' | 'manual'>(initialSetupMode);
   const [walletSelected, setWalletSelected] = useState(false);
   const { address } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
@@ -173,15 +175,8 @@ export const SeedPhraseForm = ({
         return;
       }
       setIsGenerating(true);
-      const domain = { name: 'Privacy Pools', version: '1' } as const;
-      const types = {
-        DeriveSeed: [
-          { name: 'action', type: 'string' },
-          { name: 'context', type: 'string' },
-        ],
-      } as const;
-      const message = { action: 'Derive Account Seed', context: 'privacy-pools/wallet-seed:v1' } as const;
-      const signature = await signTypedDataAsync({ domain, types, primaryType: 'DeriveSeed', message });
+      const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address);
+      const signature = await signTypedDataAsync({ domain, types, primaryType, message });
 
       const mnemonic = await deriveMnemonicFromWalletSignature(signature, address);
       setSplitSeedPhrase(mnemonic.split(' '));

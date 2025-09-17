@@ -1,10 +1,11 @@
 'use client';
 
-// Derive a deterministic 12-word mnemonic from a wallet signature.
-// - Prompts the user to sign a stable EIP-712 message in UI (outside this util)
-// - Uses HKDF-SHA256 over the signature to derive 16 bytes of entropy
-// - Converts entropy to a BIP39 mnemonic (English)
+// Signature-based seed derivation aligned with sigfuture.md.
+// - EIP-712 signing payload must commit to the address hash (keccak256(A_secret)).
+// - Derivation uses HKDF-Extract with IKM = r (from signature) and salt = A_secret (address bytes).
+// - HKDF-Expand (via HKDF info) with appId to produce 16 bytes for a 12-word mnemonic.
 
+import { keccak256, toBytes } from 'viem';
 import { english } from 'viem/accounts';
 
 const textEncoder = new TextEncoder();
@@ -75,39 +76,40 @@ function bytesToBits(bytes: Uint8Array): string {
 }
 
 export async function deriveMnemonicFromWalletSignature(signatureHex: string, address: string): Promise<string> {
-  console.log('Deriving mnemonic from wallet signature:');
-  console.log('- Signature:', signatureHex);
-  console.log('- Address:', address);
+  // Decode signature and extract r (first 32 bytes)
+  const sig = hexToBytes(signatureHex);
+  if (sig.length < 65) throw new Error('Invalid signature length');
+  const r = sig.slice(0, 32); // IKM for HKDF-Extract
 
-  const sigBytes = hexToBytes(signatureHex);
-  const ikm = await sha256(sigBytes.buffer);
-  const salt = await sha256(textEncoder.encode(`pp:wallet-seed|${address.toLowerCase()}`).buffer);
+  // Salt is the raw address bytes (A_secret)
+  const addr = address.toLowerCase();
+  const addrBytes = hexToBytes(addr);
+
+  // appId (HKDF info) binds derivation to this app/version
   const info = textEncoder.encode('privacy-pools/wallet-seed:v1');
-  const entropy = await hkdf(ikm.buffer, salt.buffer, info.buffer, 16);
 
-  console.log(
-    '- IKM hash:',
-    Array.from(ikm)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-      .slice(0, 16) + '...',
-  );
-  console.log(
-    '- Salt hash:',
-    Array.from(salt)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-      .slice(0, 16) + '...',
-  );
-  console.log(
-    '- Entropy:',
-    Array.from(entropy)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join(''),
-  );
-
+  // Single HKDF call (Extract+Expand): IKM=r, salt=A_secret, info=appId, len=16 bytes
+  const entropy = await hkdf(r.buffer, addrBytes.buffer, info.buffer, 16);
   const mnemonic = await mnemonicFromEntropy(entropy);
-  console.log('- First 3 words:', mnemonic.split(' ').slice(0, 3).join(' '));
-
   return mnemonic;
+}
+
+// Build the EIP-712 typed data for seed derivation, committing to keccak256(address).
+export function buildSeedDerivationTypedData(address: string) {
+  const addrBytes = toBytes(address as `0x${string}`);
+  const addressHash = keccak256(addrBytes);
+  const domain = { name: 'Privacy Pools', version: '1' } as const;
+  const types = {
+    DeriveSeed: [
+      { name: 'action', type: 'string' },
+      { name: 'context', type: 'string' },
+      { name: 'addressHash', type: 'bytes32' },
+    ],
+  } as const;
+  const message = {
+    action: 'Derive Account Seed',
+    context: 'privacy-pools/wallet-seed:v1',
+    addressHash: addressHash as `0x${string}`,
+  } as const;
+  return { domain, types, message, primaryType: 'DeriveSeed' as const };
 }
