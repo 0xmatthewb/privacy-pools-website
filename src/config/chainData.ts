@@ -370,7 +370,8 @@ const testnetChainData: ChainData = {
     rpcUrl: `https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`,
     aspUrl: ASP_ENDPOINT,
     relayers: [
-      { name: 'Testnet Relay', url: 'https://testnet-relayer.privacypools.com' },
+      { name: 'Testnet Relay', url: 'https://relayer-staging-149184580131.us-east1.run.app' },
+      { name: 'Testnet Relay_old', url: 'https://testnet-relayer.privacypools.com' },
       // { name: 'Freedom Relay', url: 'https://fastrelay.xyz' },
     ],
     poolInfo: [
