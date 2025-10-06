@@ -8,6 +8,7 @@ import {
   coinbaseWallet,
   metaMaskWallet,
 } from '@rainbow-me/rainbowkit/wallets';
+//import { porto } from 'porto/wagmi';
 import { HttpTransport } from 'viem';
 import { mainnet, type Chain } from 'viem/chains';
 import { createConfig, http } from 'wagmi';
@@ -56,8 +57,7 @@ export const transports = allChains.reduce(
   {} as Record<number, HttpTransport>,
 );
 
-// Add Safe connector to the list
-const allConnectors = [...connectors, safe()];
+const allConnectors = [/* remove Porto for now porto(),*/ ...connectors, safe()];
 
 export const defaultConfig = createConfig({
   chains: allChains,

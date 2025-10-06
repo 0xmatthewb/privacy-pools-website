@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { captureException, withScope } from '@sentry/nextjs';
 import {
   Address,
   erc20Abi,
@@ -47,10 +48,61 @@ export const useDeposit = () => {
   const { amount, setTransactionHash, vettingFeeBPS, selectedAlternativeToken } = usePoolAccountsContext();
   const [isLoading, setIsLoading] = useState(false);
   const { accountService, poolAccounts, addPoolAccount } = useAccountContext();
-  const { data: walletClient } = useWalletClient({ chainId });
+  const { data: walletClient, refetch: refetchWalletClient } = useWalletClient({ chainId });
   const publicClient = usePublicClient({ chainId });
   const { isSafeApp, createSafeBatchTransaction, sendSafeBatchTransaction, waitForSafeTransaction } =
     useSafeTransactions();
+
+  const logErrorToSentry = useCallback(
+    (error: Error | unknown, context: Record<string, unknown>) => {
+      // FILTERING POLICY: Only filter out user interaction/rejection errors
+      // Everything else (network errors, contract errors, etc.) should be logged to Sentry
+      if (error && typeof error === 'object') {
+        const message = 'message' in error ? String(error.message) : '';
+        const errorCode = 'code' in error ? error.code : undefined;
+
+        // Only skip user interaction errors - all technical errors should go to Sentry
+        if (
+          errorCode === 4001 ||
+          message.includes('User rejected the request') ||
+          message.includes('User denied') ||
+          message.includes('User cancelled')
+        ) {
+          console.warn('Filtered user rejection error (not logging to Sentry - user interaction only)');
+          return;
+        }
+      }
+
+      withScope((scope) => {
+        scope.setUser({
+          address: address,
+        });
+
+        // Set additional context - CAREFULLY avoid sensitive data
+        scope.setContext('deposit_context', {
+          chainId,
+          poolAddress: selectedPoolInfo?.address,
+          poolScope: selectedPoolInfo?.scope,
+          asset: selectedPoolInfo?.asset,
+          walletConnected: !!walletClient,
+          publicClientConnected: !!publicClient,
+          testMode: TEST_MODE,
+          isSafeApp,
+          hasSelectedAlternativeToken: !!selectedAlternativeToken,
+          // DO NOT LOG: nullifier, secret, precommitmentHash, amount, or any sensitive data
+          ...context,
+        });
+
+        scope.setTag('operation', 'deposit');
+        scope.setTag('chain_id', chainId?.toString());
+        scope.setTag('test_mode', TEST_MODE.toString());
+
+        // Log the error
+        captureException(error);
+      });
+    },
+    [address, chainId, selectedPoolInfo, walletClient, publicClient, selectedAlternativeToken, isSafeApp],
+  );
 
   const allowance = async (tokenAddress: Address, owner: Address, spender: Address) => {
     if (!publicClient) throw new Error('Public client not found');
@@ -67,9 +119,19 @@ export const useDeposit = () => {
       setIsClosable(false);
       setIsLoading(true);
 
-      // Only switch chain if not already on the correct chain and not using Safe
-      if (!isSafeApp && walletClient?.chain?.id !== chainId) {
+      // Always switch to the target chain to ensure wallet is on correct network
+      // This fixes issues where wallet reports wrong chain ID even when showing correct network
+      let wc = walletClient;
+      if (!isSafeApp) {
         await switchChainAsync({ chainId });
+        // After switching chain, refetch wallet client so it is available on first attempt
+        const refreshed = await refetchWalletClient();
+        wc = refreshed.data ?? wc;
+      }
+      // If wallet client is still not ready (e.g., first render), try a one-time refetch
+      if (!wc) {
+        const refreshed = await refetchWalletClient();
+        wc = refreshed.data ?? wc;
       }
 
       if (!accountService) throw new Error('AccountService not found');
@@ -96,7 +158,7 @@ export const useDeposit = () => {
       const value = parseUnits(amount, decimals);
 
       if (!TEST_MODE) {
-        if (!walletClient || !publicClient) throw new Error('Wallet or Public client not found');
+        if (!publicClient || (!isSafeApp && !wc)) throw new Error('Wallet or Public client not found');
 
         if (!selectedPoolInfo.scope || !precommitmentHash || !value)
           throw new Error('Missing required data to deposit');
@@ -115,6 +177,13 @@ export const useDeposit = () => {
               value,
             })
             .catch((err) => {
+              // Log simulation error to Sentry with context
+              logErrorToSentry(err, {
+                operation_step: 'eth_deposit_simulation',
+                contract_function: 'deposit',
+                error_message: err?.metaMessages?.[0] || err?.message || '',
+              });
+
               if (err?.metaMessages[0] == 'Error: PrecommitmentAlreadyUsed()') {
                 throw new Error('Precommitment already used');
               }
@@ -122,7 +191,7 @@ export const useDeposit = () => {
             });
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { account: _account, ...restRequest } = request;
-          hash = await walletClient.writeContract(restRequest);
+          hash = await wc!.writeContract(restRequest);
         } else {
           // ERC-20 token deposits - check for EIP-7702 batching support
           if (!selectedPoolInfo.assetAddress) throw new Error('Asset address missing for token deposit');
@@ -141,8 +210,8 @@ export const useDeposit = () => {
 
               // Check if user has enough USDS
               const hasEnoughBalance = await checkAlternativeTokenBalance(
-                selectedAlternativeToken.tokenAddress,
-                address,
+                selectedAlternativeToken!.tokenAddress,
+                address!,
                 value,
                 publicClient!,
               );
@@ -152,13 +221,13 @@ export const useDeposit = () => {
               }
 
               // Get preview of sUSDS shares
-              await getStakedTokenPreview(selectedAlternativeToken, value, publicClient!);
+              await getStakedTokenPreview(selectedAlternativeToken!, value, publicClient!);
 
               // Create alternative token deposit batch (approve USDS, stake, approve sUSDS)
               const { calls: alternativeBatch, expectedStakedAmount } = await createAlternativeTokenDepositBatch(
-                selectedAlternativeToken,
+                selectedAlternativeToken!,
                 value,
-                address,
+                address!,
                 selectedPoolInfo.entryPointAddress,
                 precommitmentHash,
                 publicClient!,
@@ -258,8 +327,8 @@ export const useDeposit = () => {
 
               // Check if user has enough USDS
               const hasEnoughBalance = await checkAlternativeTokenBalance(
-                selectedAlternativeToken.tokenAddress,
-                address,
+                selectedAlternativeToken!.tokenAddress,
+                address!,
                 value,
                 publicClient!,
               );
@@ -269,13 +338,13 @@ export const useDeposit = () => {
               }
 
               // Get preview of sUSDS shares
-              await getStakedTokenPreview(selectedAlternativeToken, value, publicClient!);
+              await getStakedTokenPreview(selectedAlternativeToken!, value, publicClient!);
 
               // Create alternative token deposit batch (approve USDS, stake, approve sUSDS)
               const { calls: alternativeBatch, expectedStakedAmount } = await createAlternativeTokenDepositBatch(
-                selectedAlternativeToken,
+                selectedAlternativeToken!,
                 value,
-                address,
+                address!,
                 selectedPoolInfo.entryPointAddress,
                 precommitmentHash,
                 publicClient!,
@@ -305,7 +374,7 @@ export const useDeposit = () => {
               ];
 
               // Send batch transaction using MetaMask Smart Account API
-              const batchId = await sendBatchTransaction(batchCalls, address, chainId);
+              const batchId = await sendBatchTransaction(batchCalls, address!, chainId);
 
               addNotification('info', 'Batch transaction with staking submitted, waiting for confirmation...');
 
@@ -362,7 +431,7 @@ export const useDeposit = () => {
               );
 
               // Send batch transaction using MetaMask Smart Account API
-              const batchId = await sendBatchTransaction(batchCalls, address, chainId);
+              const batchId = await sendBatchTransaction(batchCalls, address!, chainId);
 
               addNotification('info', 'Batch transaction submitted, waiting for confirmation...');
 
@@ -412,7 +481,7 @@ export const useDeposit = () => {
             // Standard flow - check allowance and approve if needed
             if (assetAllowance < value) {
               addNotification('info', 'Allowance insufficient. Requesting approval...');
-              const approveHash = await walletClient.writeContract({
+              const approveHash = await wc!.writeContract({
                 address: selectedPoolInfo.assetAddress,
                 abi: erc20Abi,
                 functionName: 'approve',
@@ -436,6 +505,13 @@ export const useDeposit = () => {
                 args: [selectedPoolInfo.assetAddress, value, precommitmentHash],
               })
               .catch((err) => {
+                // Log simulation error to Sentry with context
+                logErrorToSentry(err, {
+                  operation_step: 'token_deposit_simulation',
+                  contract_function: 'deposit',
+                  error_message: err?.metaMessages?.[0] || err?.message || '',
+                });
+
                 if (err?.metaMessages[0] == 'Error: PrecommitmentAlreadyUsed()') {
                   throw new Error('Precommitment already used');
                 }
@@ -443,7 +519,7 @@ export const useDeposit = () => {
               });
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { account: _account, ...restRequest } = request;
-            hash = await walletClient.writeContract(restRequest);
+            hash = await wc!.writeContract(restRequest);
           }
         }
 
@@ -512,6 +588,18 @@ export const useDeposit = () => {
       }
     } catch (err) {
       const error = err as TransactionExecutionError;
+
+      // Log error to Sentry with context
+      logErrorToSentry(error, {
+        operation_step: 'deposit_execution',
+        error_type: error?.name || 'unknown',
+        short_message: error?.shortMessage,
+        has_account_service: !!accountService,
+        has_address: !!address,
+        selected_asset: selectedPoolInfo?.asset,
+        // DO NOT LOG: amount, secrets, nullifiers, or other sensitive data
+      });
+
       addNotification('error', getDefaultErrorMessage(error?.shortMessage || error?.message));
       console.error('Error depositing', error);
     }
