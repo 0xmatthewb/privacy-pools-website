@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Stack, styled, Typography, Divider, Link } from '@mui/material';
+import { Button, Stack, styled, Typography, Divider, Link, Alert } from '@mui/material';
 import { captureException } from '@sentry/nextjs';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { CloseButton } from '~/components';
-import { useGoTo, useModal, useAccountContext, useAuthContext, useNotifications } from '~/hooks';
+import { useGoTo, useModal, useAccountContext, useAuthContext, useNotifications, useAccountType } from '~/hooks';
 import { ModalType } from '~/types';
 import { ROUTER, deriveMnemonicFromWalletSignature, buildSeedDerivationTypedData } from '~/utils';
 
@@ -13,12 +13,27 @@ export const Welcome = () => {
   const goTo = useGoTo();
   const [isGenerating, setIsGenerating] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
-  const { address } = useAccount();
+  const { address, connector } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const { setModalOpen } = useModal();
   const { setSeed, loadAccount } = useAccountContext();
   const { login } = useAuthContext();
   const { addNotification } = useNotifications();
+  const { accountType, isSafeAccount } = useAccountType();
+
+  // Check if current wallet is Coinbase Wallet
+  const isCoinbaseWallet = connector?.id === 'coinbaseWalletSDK' || connector?.name?.toLowerCase().includes('coinbase');
+
+  // Check if current wallet is a smart contract wallet (exclude MetaMask Smart Account which is EIP-7702 and can still sign)
+  const isSmartContractWallet =
+    accountType === 'Unknown Smart Contract' ||
+    accountType === 'Unknown Smart Account' ||
+    accountType === 'Safe Wallet' ||
+    accountType === 'Safe App' ||
+    isSafeAccount;
+
+  // Disable wallet-based generation for smart contract wallets AND Coinbase Wallet
+  const isWalletSigningDisabled = isSmartContractWallet || isCoinbaseWallet;
 
   const handleManualCreate = () => {
     goTo(ROUTER.account.children.create);
@@ -98,11 +113,20 @@ export const Welcome = () => {
       </Stack>
 
       <Stack alignItems='center' gap={2} sx={{ width: '100%' }}>
+        {isWalletSigningDisabled && address && (
+          <Alert severity='warning' sx={{ width: '100%', maxWidth: '32rem' }}>
+            {isCoinbaseWallet
+              ? 'Coinbase Wallet does not support wallet-based key generation.'
+              : 'Smart wallets do not support wallet-based key generation.'}{' '}
+            Please use manual seedphrase generation below.
+          </Alert>
+        )}
+
         <Button
           variant='contained'
           color='primary'
           onClick={handleGenerateWithWallet}
-          disabled={isGenerating}
+          disabled={isGenerating || isWalletSigningDisabled}
           fullWidth
           sx={{ maxWidth: '32rem' }}
         >

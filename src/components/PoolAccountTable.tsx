@@ -161,14 +161,27 @@ export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
                   <STableCell sx={{ paddingRight: mobile ? 0 : '1rem', textAlign: 'left' }}>
                     <Tooltip
                       title={
-                        getRowReviewStatus(row) === ReviewStatus.PENDING
-                          ? statusMessage
-                          : getRowReviewStatus(row) === ReviewStatus.POI_REQUIRED
-                            ? 'Proof of Association required. Visit tornado.0xbow.io to continue.'
-                            : ''
+                        getRowReviewStatus(row) === ReviewStatus.PENDING ? (
+                          statusMessage
+                        ) : getRowReviewStatus(row) === ReviewStatus.POI_REQUIRED ? (
+                          <span>
+                            Proof of Association required. Visit{' '}
+                            <a
+                              href='https://tornado.0xbow.io'
+                              target='_blank'
+                              rel='noopener noreferrer'
+                              style={{ color: 'inherit', textDecoration: 'underline' }}
+                            >
+                              tornado.0xbow.io
+                            </a>{' '}
+                            to continue.
+                          </span>
+                        ) : (
+                          ''
+                        )
                       }
                       placement='top'
-                      disableInteractive
+                      disableInteractive={getRowReviewStatus(row) !== ReviewStatus.POI_REQUIRED}
                     >
                       <StatusChip status={getRowReviewStatus(row)} compact={mobile} />
                     </Tooltip>
