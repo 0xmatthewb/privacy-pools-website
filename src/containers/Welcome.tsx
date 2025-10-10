@@ -293,7 +293,7 @@ export const Welcome = () => {
         <Button
           variant='contained'
           color='primary'
-          onClick={handleGenerateWithWallet}
+          onClick={() => handleGenerateWithWallet()}
           disabled={isGenerating || isWalletSigningDisabled}
           fullWidth
           sx={{ maxWidth: '32rem' }}
