@@ -37,7 +37,11 @@ function bytesToBits(bytes: Uint8Array): string {
   return bits;
 }
 
-export async function deriveMnemonicFromWalletSignature(signatureHex: string, address: string): Promise<string> {
+export async function deriveMnemonicFromWalletSignature(
+  signatureHex: string,
+  address: string,
+  version: 'v1' | 'v2' = 'v2',
+): Promise<string> {
   // Decode signature and extract r (first 32 bytes)
   const cleanHex = signatureHex.startsWith('0x') ? signatureHex.slice(2) : signatureHex;
   const sig = hexToBytes(cleanHex);
@@ -50,10 +54,12 @@ export async function deriveMnemonicFromWalletSignature(signatureHex: string, ad
   const addrBytes = hexToBytes(cleanAddr);
 
   // appId (HKDF info) binds derivation to this app/version
-  const info = textEncoder.encode('privacy-pools/wallet-seed:v1');
+  const info = textEncoder.encode(`privacy-pools/wallet-seed:${version}`);
 
-  // Single HKDF call (Extract+Expand) using noble-hashes: IKM=r, salt=A_secret, info=appId, len=16 bytes
-  const entropy = hkdf(sha256, r, addrBytes, info, 16);
+  // v1: 16 bytes (128-bit entropy, 12-word mnemonic) - legacy for backward compatibility
+  // v2: 32 bytes (256-bit entropy, 24-word mnemonic) - enhanced security, default for new accounts
+  const entropyLength = version === 'v1' ? 16 : 32;
+  const entropy = hkdf(sha256, r, addrBytes, info, entropyLength);
 
   // Nullify sensitive signature data after use (security recommendation from auditor)
   r.fill(0);
@@ -68,7 +74,7 @@ export async function deriveMnemonicFromWalletSignature(signatureHex: string, ad
 }
 
 // Build the EIP-712 typed data for seed derivation, committing to keccak256(address).
-export function buildSeedDerivationTypedData(address: string) {
+export function buildSeedDerivationTypedData(address: string, version: 'v1' | 'v2' = 'v2') {
   const addrBytes = toBytes(address as `0x${string}`);
   const addressHash = keccak256(addrBytes);
   const domain = { name: 'Privacy Pools', version: '1' } as const;
@@ -81,7 +87,7 @@ export function buildSeedDerivationTypedData(address: string) {
   } as const;
   const message = {
     action: 'Derive Account Seed',
-    context: 'privacy-pools/wallet-seed:v1',
+    context: `privacy-pools/wallet-seed:${version}`,
     addressHash: addressHash as `0x${string}`,
   } as const;
   return { domain, types, message, primaryType: 'DeriveSeed' as const };

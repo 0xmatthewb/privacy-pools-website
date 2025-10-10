@@ -12,8 +12,8 @@ export const verifyAndSanitizeSeedPhrase = (seedPhrase: string) => {
 
   const words = sanitizedSeedPhrase.split(' ');
 
-  if (words.length !== 12) {
-    throw new Error('Recovery phrase must be 12 words');
+  if (words.length !== 12 && words.length !== 24) {
+    throw new Error('Recovery phrase must be 12 or 24 words');
   }
 
   if (words.some((word) => !english.includes(word))) {

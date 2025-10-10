@@ -12,18 +12,17 @@ import {
   OutlinedInput,
   Stack,
   styled,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import { captureException } from '@sentry/nextjs';
-import { english, generateMnemonic } from 'viem/accounts';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { useModal } from '~/hooks';
 import { ModalType } from '~/types';
 import { useClipboard, deriveMnemonicFromWalletSignature, buildSeedDerivationTypedData } from '~/utils';
-
-const arrOfKeys = generateMnemonic(english).split(' '); // 12 words
 
 export const SeedPhraseForm = ({
   seedPhrase,
@@ -52,6 +51,7 @@ export const SeedPhraseForm = ({
   const [verificationWords, setVerificationWords] = useState<{ index: number; word: string }[]>([]);
   const [verificationInputs, setVerificationInputs] = useState<string[]>([]);
   const [verificationError, setVerificationError] = useState(false);
+  const [wordCount, setWordCount] = useState<12 | 24>(12);
 
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -64,6 +64,9 @@ export const SeedPhraseForm = ({
   const { address } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const { setModalOpen } = useModal();
+
+  // Generate array of empty strings based on word count
+  const arrOfKeys = Array.from({ length: wordCount }, (_, i) => `word-${i}`);
 
   const copyToClipboard = () => {
     copyToClipboardUtil(seedPhrase);
@@ -97,12 +100,13 @@ export const SeedPhraseForm = ({
     const words = text.split(/\s+/).filter((word) => word.length > 0);
 
     if (words.length > 1) {
-      // If it's exactly 12 words, fill all inputs
-      if (words.length === 12) {
+      // If it's exactly 12 or 24 words, fill all inputs and update word count accordingly
+      if (words.length === 12 || words.length === 24) {
         setSplitSeedPhrase(words);
+        setWordCount(words.length as 12 | 24);
         return;
       }
-      // If it's not 12 words, just update the current input with the first word
+      // If it's not 12 or 24 words, just update the current input with the first word
       text = words[0];
     }
 
@@ -126,9 +130,9 @@ export const SeedPhraseForm = ({
     const words = seedPhrase.split(' ');
     const randomIndices: number[] = [];
 
-    // Generate 3 unique random indices
+    // Generate 3 unique random indices based on the actual word count
     while (randomIndices.length < 3) {
-      const randomIndex = Math.floor(Math.random() * 12);
+      const randomIndex = Math.floor(Math.random() * words.length);
       if (!randomIndices.includes(randomIndex)) {
         randomIndices.push(randomIndex);
       }
@@ -187,10 +191,12 @@ export const SeedPhraseForm = ({
         return;
       }
       setIsGenerating(true);
-      const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address);
+      // Use v2 by default for enhanced security (24-word mnemonic with 256-bit entropy)
+      const version: 'v1' | 'v2' = 'v2';
+      const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address, version);
       const signature = await signTypedDataAsync({ domain, types, primaryType, message });
 
-      const mnemonic = await deriveMnemonicFromWalletSignature(signature, address);
+      const mnemonic = await deriveMnemonicFromWalletSignature(signature, address, version);
       setSplitSeedPhrase(mnemonic.split(' '));
       // Mask by default on both Create & Load
       setIsHidden(true);
@@ -212,16 +218,27 @@ export const SeedPhraseForm = ({
   };
 
   useEffect(() => {
-    if (splitSeedPhrase.length === 12 && !splitSeedPhrase.includes('')) {
+    if (
+      (splitSeedPhrase.length === 12 || splitSeedPhrase.length === 24) &&
+      !splitSeedPhrase.includes('') &&
+      splitSeedPhrase.length === wordCount
+    ) {
       setSeedPhrase(splitSeedPhrase.join(' '));
     } else {
       setSeedPhrase('');
     }
-  }, [splitSeedPhrase, setSeedPhrase]);
+  }, [splitSeedPhrase, setSeedPhrase, wordCount]);
 
   useEffect(() => {
     if (seedPhrase) {
-      setSplitSeedPhrase(seedPhrase.split(' '));
+      const words = seedPhrase.split(' ');
+      setSplitSeedPhrase(words);
+      // Update word count based on the loaded seed phrase
+      if (words.length === 24) {
+        setWordCount(24);
+      } else if (words.length === 12) {
+        setWordCount(12);
+      }
     }
   }, [seedPhrase]);
 
@@ -331,6 +348,26 @@ export const SeedPhraseForm = ({
           onMouseEnter={() => setIsHidden(false)}
           onMouseLeave={() => setIsHidden(true)}
         >
+          <Stack direction='row' justifyContent='center' alignItems='center' gap={1}>
+            <Typography variant='body2' color='text.secondary'>
+              Seedphrase length:
+            </Typography>
+            <ToggleButtonGroup
+              value={wordCount}
+              exclusive
+              onChange={(_, value) => {
+                if (value === 12 || value === 24) {
+                  setWordCount(value);
+                  // Clear inputs when switching modes to avoid confusion
+                  setSplitSeedPhrase([]);
+                }
+              }}
+              size='small'
+            >
+              <ToggleButton value={12}>12 words</ToggleButton>
+              <ToggleButton value={24}>24 words</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
           <Box position='relative'>
             <Grid2 container spacing={2}>
               {arrOfKeys.map((key, index) => (
