@@ -5,20 +5,24 @@ import { Checkmark, Copy, Paste, View, ViewOff } from '@carbon/icons-react';
 import {
   Box,
   Button,
+  Divider,
   FormControl,
   Grid2,
   InputAdornment,
   OutlinedInput,
   Stack,
   styled,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { english, generateMnemonic } from 'viem/accounts';
-import { useClipboard } from '~/utils';
-
-const arrOfKeys = generateMnemonic(english).split(' '); // 12 words
+import { captureException } from '@sentry/nextjs';
+import { useAccount, useSignTypedData } from 'wagmi';
+import { useModal } from '~/hooks';
+import { ModalType } from '~/types';
+import { useClipboard, deriveMnemonicFromWalletSignature, buildSeedDerivationTypedData } from '~/utils';
 
 export const SeedPhraseForm = ({
   seedPhrase,
@@ -26,12 +30,20 @@ export const SeedPhraseForm = ({
   type,
   onEnterKey,
   onVerificationComplete,
+  showInputs = false,
+  hideActions = false,
+  onMethodChange,
+  initialSetupMode = 'initial',
 }: {
   seedPhrase: string;
   setSeedPhrase: (seedPhrase: string) => void;
   type: 'create' | 'load';
   onEnterKey: (e: React.KeyboardEvent<HTMLElement>) => void;
-  onVerificationComplete?: (isVerified: boolean) => void;
+  onVerificationComplete?: (isVerified: boolean, skipped?: boolean) => void;
+  showInputs?: boolean;
+  hideActions?: boolean;
+  onMethodChange?: (method: 'wallet' | 'manual') => void;
+  initialSetupMode?: 'initial' | 'manual';
 }) => {
   const [isHidden, setIsHidden] = useState(true);
   const [splitSeedPhrase, setSplitSeedPhrase] = useState<string[]>([]);
@@ -39,10 +51,22 @@ export const SeedPhraseForm = ({
   const [verificationWords, setVerificationWords] = useState<{ index: number; word: string }[]>([]);
   const [verificationInputs, setVerificationInputs] = useState<string[]>([]);
   const [verificationError, setVerificationError] = useState(false);
+  const [wordCount, setWordCount] = useState<12 | 24>(12);
 
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { copied: isCopied, copyToClipboard: copyToClipboardUtil, readFromClipboard } = useClipboard({ timeout: 3000 });
+  const [clipboardCleared, setClipboardCleared] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [skippedVerification, setSkippedVerification] = useState(false);
+  const [setupMode, setSetupMode] = useState<'initial' | 'manual'>(initialSetupMode);
+  const [walletSelected, setWalletSelected] = useState(false);
+  const { address } = useAccount();
+  const { signTypedDataAsync } = useSignTypedData();
+  const { setModalOpen } = useModal();
+
+  // Generate array of empty strings based on word count
+  const arrOfKeys = Array.from({ length: wordCount }, (_, i) => `word-${i}`);
 
   const copyToClipboard = () => {
     copyToClipboardUtil(seedPhrase);
@@ -58,6 +82,17 @@ export const SeedPhraseForm = ({
     }
   }, [seedPhrase, setSeedPhrase, readFromClipboard]);
 
+  const clearClipboard = useCallback(async () => {
+    try {
+      await copyToClipboardUtil('');
+      setClipboardCleared(true);
+      setTimeout(() => setClipboardCleared(false), 2000);
+    } catch (err) {
+      // swallow clipboard permission errors; nothing else to do here
+      console.warn('Unable to clear clipboard', err);
+    }
+  }, [copyToClipboardUtil]);
+
   const changeSeedPhraseWord = (text: string, index: number) => {
     text = text.trim().replace(/\s+/g, ' ');
 
@@ -65,12 +100,13 @@ export const SeedPhraseForm = ({
     const words = text.split(/\s+/).filter((word) => word.length > 0);
 
     if (words.length > 1) {
-      // If it's exactly 12 words, fill all inputs
-      if (words.length === 12) {
+      // If it's exactly 12 or 24 words, fill all inputs and update word count accordingly
+      if (words.length === 12 || words.length === 24) {
         setSplitSeedPhrase(words);
+        setWordCount(words.length as 12 | 24);
         return;
       }
-      // If it's not 12 words, just update the current input with the first word
+      // If it's not 12 or 24 words, just update the current input with the first word
       text = words[0];
     }
 
@@ -94,9 +130,9 @@ export const SeedPhraseForm = ({
     const words = seedPhrase.split(' ');
     const randomIndices: number[] = [];
 
-    // Generate 3 unique random indices
+    // Generate 3 unique random indices based on the actual word count
     while (randomIndices.length < 3) {
-      const randomIndex = Math.floor(Math.random() * 12);
+      const randomIndex = Math.floor(Math.random() * words.length);
       if (!randomIndices.includes(randomIndex)) {
         randomIndices.push(randomIndex);
       }
@@ -130,7 +166,8 @@ export const SeedPhraseForm = ({
 
     if (isCorrect) {
       setVerificationError(false);
-      onVerificationComplete?.(true);
+      onVerificationComplete?.(true, false);
+      setSkippedVerification(false);
     } else {
       setVerificationError(true);
     }
@@ -147,25 +184,69 @@ export const SeedPhraseForm = ({
     setShowVerification(true);
   };
 
+  const handleGenerateWithWallet = async () => {
+    try {
+      if (!address) {
+        setModalOpen(ModalType.CONNECT);
+        return;
+      }
+      setIsGenerating(true);
+      // Use v2 by default for enhanced security (24-word mnemonic with 256-bit entropy)
+      const version: 'v1' | 'v2' = 'v2';
+      const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address, version);
+      const signature = await signTypedDataAsync({ domain, types, primaryType, message });
+
+      const mnemonic = await deriveMnemonicFromWalletSignature(signature, address, version);
+      setSplitSeedPhrase(mnemonic.split(' '));
+      // Mask by default on both Create & Load
+      setIsHidden(true);
+      setSkippedVerification(false);
+      setWalletSelected(true);
+      setSetupMode('manual');
+      // For create flow, allow skipping verification as requested
+      if (type === 'create') {
+        setSkippedVerification(true);
+        onVerificationComplete?.(true, true);
+      }
+      onMethodChange?.('wallet');
+    } catch (err) {
+      console.error(err);
+      captureException(err, { tags: { stage: 'generate_mnemonic_wallet' } });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   useEffect(() => {
-    if (splitSeedPhrase.length === 12 && !splitSeedPhrase.includes('')) {
+    if (
+      (splitSeedPhrase.length === 12 || splitSeedPhrase.length === 24) &&
+      !splitSeedPhrase.includes('') &&
+      splitSeedPhrase.length === wordCount
+    ) {
       setSeedPhrase(splitSeedPhrase.join(' '));
     } else {
       setSeedPhrase('');
     }
-  }, [splitSeedPhrase, setSeedPhrase]);
+  }, [splitSeedPhrase, setSeedPhrase, wordCount]);
 
   useEffect(() => {
     if (seedPhrase) {
-      setSplitSeedPhrase(seedPhrase.split(' '));
+      const words = seedPhrase.split(' ');
+      setSplitSeedPhrase(words);
+      // Update word count based on the loaded seed phrase
+      if (words.length === 24) {
+        setWordCount(24);
+      } else if (words.length === 12) {
+        setWordCount(12);
+      }
     }
   }, [seedPhrase]);
 
   useEffect(() => {
-    if (type === 'load') {
+    if (type === 'load' && setupMode === 'manual') {
       setIsHidden(false);
     }
-  }, [type]);
+  }, [type, setupMode]);
 
   // Verification Step
   if (showVerification && type === 'create') {
@@ -237,50 +318,117 @@ export const SeedPhraseForm = ({
     );
   }
 
+  // Initial setup screen for both Create & Load: offer wallet first, then passkey or manual.
+  if (setupMode === 'initial') {
+    return (
+      <Stack alignItems='center' gap={2} sx={{ width: '100%' }}>
+        <Button variant='contained' color='primary' onClick={handleGenerateWithWallet} disabled={isGenerating}>
+          Continue with Wallet
+        </Button>
+        <Divider sx={{ width: '100%', maxWidth: '32rem' }}>Or</Divider>
+        <Button
+          variant='text'
+          onClick={() => {
+            setSetupMode('manual');
+            onMethodChange?.('manual');
+          }}
+        >
+          Manual Setup
+        </Button>
+      </Stack>
+    );
+  }
+
   return (
     <>
-      <Stack
-        gap={3}
-        onKeyDown={onEnterKey}
-        onMouseEnter={() => setIsHidden(false)}
-        onMouseLeave={() => setIsHidden(true)}
-      >
-        <Box position='relative'>
-          <Grid2 container spacing={2}>
-            {arrOfKeys.map((key, index) => (
-              <Grid2 size={{ xs: 6, md: 4 }} key={key + index}>
-                <FormControl variant='outlined' fullWidth>
-                  <OutlinedInput
-                    type={isHidden ? 'password' : 'text'}
-                    value={splitSeedPhrase[index] ?? ''}
-                    onChange={(e) => changeSeedPhraseWord(e.target.value, index)}
-                    onKeyDown={handleKeyDown}
-                    startAdornment={<InputAdornment position='start'>{index + 1}.</InputAdornment>}
-                  />
-                </FormControl>
-              </Grid2>
-            ))}
-          </Grid2>
-          {(type === 'create' || isHidden) && <CoverSeedPhrase isHidden={isHidden} setIsHidden={setIsHidden} />}
-        </Box>
-      </Stack>
-
-      {type === 'create' && (
-        <Stack alignItems='center' gap={2}>
-          <Button onClick={copyToClipboard} startIcon={isCopied ? <Checkmark /> : <Copy />}>
-            {isCopied ? 'Copied!' : 'Copy Recovery Phrase'}
-          </Button>
-          <Button variant='contained' onClick={handleProceedToVerification} disabled={!seedPhrase}>
-            Continue to Verification
-          </Button>
+      {(showInputs || (!walletSelected && setupMode === 'manual')) && (
+        <Stack
+          gap={3}
+          onKeyDown={onEnterKey}
+          onMouseEnter={() => setIsHidden(false)}
+          onMouseLeave={() => setIsHidden(true)}
+        >
+          <Stack direction='row' justifyContent='center' alignItems='center' gap={1}>
+            <Typography variant='body2' color='text.secondary'>
+              Seedphrase length:
+            </Typography>
+            <ToggleButtonGroup
+              value={wordCount}
+              exclusive
+              onChange={(_, value) => {
+                if (value === 12 || value === 24) {
+                  setWordCount(value);
+                  // Clear inputs when switching modes to avoid confusion
+                  setSplitSeedPhrase([]);
+                }
+              }}
+              size='small'
+            >
+              <ToggleButton value={12}>12 words</ToggleButton>
+              <ToggleButton value={24}>24 words</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+          <Box position='relative'>
+            <Grid2 container spacing={2}>
+              {arrOfKeys.map((key, index) => (
+                <Grid2 size={{ xs: 6, md: 4 }} key={key + index}>
+                  <FormControl variant='outlined' fullWidth>
+                    <OutlinedInput
+                      type={isHidden ? 'password' : 'text'}
+                      value={splitSeedPhrase[index] ?? ''}
+                      onChange={(e) => changeSeedPhraseWord(e.target.value, index)}
+                      onKeyDown={handleKeyDown}
+                      startAdornment={<InputAdornment position='start'>{index + 1}.</InputAdornment>}
+                    />
+                  </FormControl>
+                </Grid2>
+              ))}
+            </Grid2>
+            {(type === 'create' || isHidden) && <CoverSeedPhrase isHidden={isHidden} setIsHidden={setIsHidden} />}
+          </Box>
         </Stack>
       )}
 
-      {type === 'load' && !mobile && (
-        <Stack alignItems='center'>
+      {type === 'create' && !hideActions && !walletSelected && (
+        <Stack alignItems='center' gap={2}>
+          {!skippedVerification && (
+            <>
+              <Button onClick={copyToClipboard} startIcon={isCopied ? <Checkmark /> : <Copy />}>
+                {isCopied ? 'Copied!' : 'Copy Recovery Phrase'}
+              </Button>
+              <Button variant='contained' onClick={handleProceedToVerification} disabled={!seedPhrase}>
+                Continue to Verification
+              </Button>
+            </>
+          )}
+          {skippedVerification && (
+            <Stack alignItems='center' gap={1}>
+              <Typography variant='caption' color='text.secondary'>
+                Verification skipped (auto-generated).
+              </Typography>
+              <Button size='small' variant='text' onClick={handleProceedToVerification}>
+                Verify Manually
+              </Button>
+            </Stack>
+          )}
+        </Stack>
+      )}
+
+      {type === 'load' && !mobile && !hideActions && (
+        <Stack alignItems='center' gap={1}>
           <Button onClick={pasteFromClipboard} startIcon={<Paste />}>
             Paste Recovery Phrase
           </Button>
+          {!!seedPhrase && (
+            <Button
+              size='small'
+              variant='text'
+              onClick={clearClipboard}
+              startIcon={clipboardCleared ? <Checkmark /> : undefined}
+            >
+              {clipboardCleared ? 'Clipboard cleared' : 'Clear Clipboard'}
+            </Button>
+          )}
         </Stack>
       )}
     </>
