@@ -14,6 +14,7 @@ export const Welcome = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
   const [generatedMnemonic, setGeneratedMnemonic] = useState<string | null>(null);
+  const [generatedVersion, setGeneratedVersion] = useState<'v1' | 'v2'>('v2');
   const [hasMnemonicDownloaded, setHasMnemonicDownloaded] = useState(false);
   const [acknowledgedRisks, setAcknowledgedRisks] = useState(false);
   const [isProceeding, setIsProceeding] = useState(false);
@@ -58,7 +59,7 @@ export const Welcome = () => {
     goTo(ROUTER.home.base);
   };
 
-  const handleGenerateWithWallet = async () => {
+  const handleGenerateWithWallet = async (version: 'v1' | 'v2' = 'v2') => {
     try {
       if (!address) {
         setModalOpen(ModalType.CONNECT);
@@ -67,7 +68,7 @@ export const Welcome = () => {
       setIsGenerating(true);
 
       // Use standardized EIP-712 payload that commits to addressHash
-      const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address);
+      const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address, version);
 
       // SECURITY: Verify signature determinism by signing twice
       addNotification('info', 'Verifying wallet signature determinism (1/2)...');
@@ -95,10 +96,11 @@ export const Welcome = () => {
         console.log('- Determinism verified: ✓');
       }
 
-      const mnemonic = await deriveMnemonicFromWalletSignature(signature1, address);
+      const mnemonic = await deriveMnemonicFromWalletSignature(signature1, address, version);
 
-      // Store generated mnemonic and show download screen
+      // Store generated mnemonic and version, then show download screen
       setGeneratedMnemonic(mnemonic);
+      setGeneratedVersion(version);
       setIsGenerating(false);
 
       // Do NOT proceed until user downloads the seedphrase
@@ -137,8 +139,9 @@ export const Welcome = () => {
       await loadAccount(generatedMnemonic);
       setSeed(generatedMnemonic);
 
-      // Track signup method for security purposes
+      // Track signup method and version for security purposes
       localStorage.setItem('signupMethod', 'wallet');
+      localStorage.setItem('walletSeedVersion', generatedVersion);
 
       if (!notificationSent) {
         addNotification(
@@ -161,6 +164,7 @@ export const Welcome = () => {
   if (generatedMnemonic) {
     const handleCancel = () => {
       setGeneratedMnemonic(null);
+      setGeneratedVersion('v2');
       setHasMnemonicDownloaded(false);
       setAcknowledgedRisks(false);
     };
@@ -169,7 +173,7 @@ export const Welcome = () => {
       <WelcomeContainer>
         <CloseButton back={handleCancel} />
 
-        <Stack gap={3} maxWidth='32rem' alignItems='center'>
+        <Stack gap={3} maxWidth='42rem' alignItems='center'>
           <Typography variant='h4' fontWeight='bold' align='center'>
             Download Your Seedphrase
           </Typography>
@@ -179,7 +183,7 @@ export const Welcome = () => {
               CRITICAL: Read This Carefully
             </Typography>
             <Typography variant='body2' component='div'>
-              <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '1.6rem' }}>
                 <li>Your Privacy Pools access is tied to your wallet&apos;s signing method</li>
                 <li>
                   If your wallet provider updates their software, changes security features, or you switch devices, you
@@ -191,7 +195,7 @@ export const Welcome = () => {
             </Typography>
           </Alert>
 
-          <Alert severity='warning' sx={{ width: '100%' }}>
+          <Alert severity='warning' sx={{ width: '100%', fontSize: '1.2rem' }}>
             <Typography variant='body2'>
               <strong>Never share your seedphrase with anyone.</strong> Anyone with access to it can steal your funds.
               Store it securely offline.
@@ -220,7 +224,7 @@ export const Welcome = () => {
                 />
               }
               label={
-                <Typography variant='body2' sx={{ fontSize: '0.875rem' }}>
+                <Typography variant='body2' sx={{ fontSize: '1em' }}>
                   I understand the risks and will download my seedphrase later from the account menu (not recommended)
                   or I have already downloaded my seedphrase before
                 </Typography>
@@ -251,7 +255,7 @@ export const Welcome = () => {
     <WelcomeContainer>
       <CloseButton back={back} />
 
-      <Stack gap={3} maxWidth='32rem'>
+      <Stack gap={3} maxWidth='42rem'>
         <Typography variant='h4' fontWeight='bold' align='center' data-testid='welcome-message'>
           Welcome to Privacy Pools
         </Typography>
@@ -260,20 +264,24 @@ export const Welcome = () => {
       <Stack alignItems='center' gap={2} sx={{ width: '100%' }}>
         {/* Warning about wallet dependency risks */}
         {address && !isWalletSigningDisabled && (
-          <Alert severity='warning' sx={{ width: '100%', maxWidth: '32rem' }}>
+          <Alert severity='info' sx={{ width: '100%', maxWidth: '42rem' }}>
             <Typography variant='body2' fontWeight='bold' gutterBottom>
-              Wallet-Based Key Generation
+              Wallet-Based Key Generation (24-word seedphrase)
             </Typography>
-            <Typography variant='body2'>
-              This convenience feature generates your account from your wallet signature. However, if your wallet
-              provider updates their signing method in the future, you may lose access. You will be required to download
-              a backup seedphrase before proceeding.
+            <Typography variant='body2' sx={{ fontSize: '1.5rem' }}>
+              This convenience feature generates a secure 24-word seedphrase from your wallet signature with 256-bit
+              entropy. However, if your wallet provider updates their signing method in the future, you may lose access.
+              You will be required to download a backup seedphrase before proceeding.
+            </Typography>
+            <Typography variant='body2' sx={{ mt: 1, fontSize: '1.3rem', fontStyle: 'italic' }}>
+              Note: If you have an existing account created with the legacy 12-word method, use &quot;Legacy wallet
+              sign-in&quot; below.
             </Typography>
           </Alert>
         )}
 
         {isWalletSigningDisabled && address && (
-          <Alert severity='warning' sx={{ width: '100%', maxWidth: '32rem' }}>
+          <Alert severity='warning' sx={{ width: '100%', maxWidth: '42rem' }}>
             {isBlockedWalletConnect
               ? 'This wallet connected via WalletConnect is not supported for wallet-based key generation. Please use MetaMask, Rabby, Rainbow, or Family wallet, or use manual seedphrase generation below.'
               : isCoinbaseWallet
@@ -285,16 +293,16 @@ export const Welcome = () => {
         <Button
           variant='contained'
           color='primary'
-          onClick={handleGenerateWithWallet}
+          onClick={() => handleGenerateWithWallet()}
           disabled={isGenerating || isWalletSigningDisabled}
           fullWidth
-          sx={{ maxWidth: '32rem' }}
+          sx={{ maxWidth: '42rem' }}
         >
           Continue with Wallet
         </Button>
-        <Divider sx={{ width: '100%', maxWidth: '32rem' }}>Or</Divider>
+        <Divider sx={{ width: '100%', maxWidth: '42rem' }}>Or</Divider>
 
-        <Stack direction='row' gap={2} sx={{ width: '100%', maxWidth: '32rem' }}>
+        <Stack direction='row' gap={2} sx={{ width: '100%', maxWidth: '42rem', flexWrap: 'wrap' }}>
           <Link
             component='button'
             onClick={handleManualCreate}
@@ -303,6 +311,7 @@ export const Welcome = () => {
               textDecoration: 'underline',
               flex: 1,
               textAlign: 'center',
+              minWidth: '120px',
             }}
           >
             Manually setup a new account
@@ -315,9 +324,24 @@ export const Welcome = () => {
               textDecoration: 'underline',
               flex: 1,
               textAlign: 'center',
+              minWidth: '120px',
             }}
           >
             Manually load an account
+          </Link>
+          <Link
+            component='button'
+            onClick={() => handleGenerateWithWallet('v1')}
+            disabled={isGenerating || isWalletSigningDisabled}
+            variant='body2'
+            sx={{
+              textDecoration: 'underline',
+              flex: 1,
+              textAlign: 'center',
+              minWidth: '120px',
+            }}
+          >
+            Legacy wallet sign-in (12-word)
           </Link>
         </Stack>
       </Stack>
@@ -331,7 +355,7 @@ const WelcomeContainer = styled(Stack)(({ theme }) => ({
   maxWidth: '48rem',
   justifyContent: 'center',
   alignItems: 'center',
-  marginTop: '18rem',
+  marginTop: '8rem',
   position: 'relative',
 
   [theme.breakpoints.down('sm')]: {
