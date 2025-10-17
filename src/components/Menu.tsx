@@ -52,8 +52,10 @@ export const Menu = () => {
   const { signTypedDataAsync } = useSignTypedData();
   const theme = useTheme();
 
-  // Get signup method from localStorage
+  // Get signup method and version from localStorage
   const signupMethod = typeof window !== 'undefined' ? localStorage.getItem('signupMethod') : null;
+  const walletSeedVersion =
+    typeof window !== 'undefined' ? (localStorage.getItem('walletSeedVersion') as 'v1' | 'v2' | null) : null;
   const canDownloadSeedphrase = signupMethod === 'wallet';
 
   const ethBalanceBN = value.toString() ?? '0';
@@ -101,7 +103,10 @@ export const Menu = () => {
       let mnemonic = '';
 
       if (signupMethod === 'wallet') {
-        const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address);
+        // Use stored version, or default to v1 for backward compatibility with users who signed in before version tracking
+        const version: 'v1' | 'v2' = walletSeedVersion || 'v1';
+
+        const { domain, types, primaryType, message } = buildSeedDerivationTypedData(address, version);
         const signature = await signTypedDataAsync({ domain, types, primaryType, message });
 
         // Debug: Log signature details (only in development with debug flag)
@@ -112,7 +117,7 @@ export const Menu = () => {
           console.log('- Signature:', signature);
         }
 
-        mnemonic = await deriveMnemonicFromWalletSignature(signature, address!);
+        mnemonic = await deriveMnemonicFromWalletSignature(signature, address!, version);
       }
 
       // Download the seedphrase
