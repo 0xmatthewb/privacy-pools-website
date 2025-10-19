@@ -8,6 +8,8 @@ export * from './CreateHistoryFile';
 export * from './LoadHistoryFile';
 export * from './PoolAccountsFull';
 export * from './PoolAccountsPreview';
+export * from './AllPoolAccountsPreview';
+export * from './AllPoolsStats';
 export * from './Modals';
 export * from './ActivityFull';
 export * from './ActivityPreview';

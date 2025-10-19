@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { QueryObserverResult, useMutation, useQuery } from '@tanstack/react-query';
 import { PoolResponse, MtRootResponse, DepositsByLabelResponse, AllEventsResponse, MtLeavesResponse } from '~/types';
-import { aspClient } from '~/utils';
+import { aspClient, PoolStatsResponse } from '~/utils';
 
 export const useASP = (
   chainId: number,
@@ -16,6 +16,7 @@ export const useASP = (
   rootsData: MtRootResponse | undefined;
   mtLeavesData: MtLeavesResponse | undefined;
   allEventsData: AllEventsResponse | undefined;
+  poolStatsData: PoolStatsResponse | undefined;
   fetchDepositsByLabel: (labels: string[]) => Promise<DepositsByLabelResponse>;
   refetchMtLeaves: () => Promise<QueryObserverResult<MtLeavesResponse, Error>>;
 } => {
@@ -41,6 +42,13 @@ export const useASP = (
     retryOnMount: false,
   });
 
+  const poolStatsQuery = useQuery({
+    queryKey: ['asp_pool_stats', chainId, aspUrl],
+    queryFn: () => aspClient.fetchPoolStats(aspUrl, chainId),
+    refetchInterval: 60000,
+    retryOnMount: false,
+  });
+
   const depositsByLabelQuery = useMutation({
     mutationFn: (labels: string[]) => aspClient.fetchDepositsByLabel(aspUrl, chainId, scope, labels),
   });
@@ -56,6 +64,7 @@ export const useASP = (
       rootsData: mtRootQuery.data,
       mtLeavesData: mtLeavesQuery.data,
       allEventsData: allEventsQuery.data,
+      poolStatsData: poolStatsQuery.data,
       refetchMtLeaves: mtLeavesQuery.refetch,
       fetchDepositsByLabel: depositsByLabelQuery.mutateAsync,
     }),
@@ -65,6 +74,7 @@ export const useASP = (
       poolInfoQuery.data,
       mtRootQuery.data,
       allEventsQuery.data,
+      poolStatsQuery.data,
       depositsByLabelQuery.mutateAsync,
       mtLeavesQuery.data,
       mtLeavesQuery.refetch,

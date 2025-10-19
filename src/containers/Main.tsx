@@ -2,7 +2,7 @@
 
 import { styled } from '@mui/material';
 import { SafeAppWrapper } from '~/components';
-import { ActivityPreview, GlobalPool, PoolAccountsPreview } from '~/containers';
+import { ActivityPreview, AllPoolsStats, GlobalPool, PoolAccountsPreview } from '~/containers';
 
 export const Main = () => {
   return (
@@ -11,6 +11,8 @@ export const Main = () => {
         <PoolAccountsPreview />
 
         <GlobalPool />
+
+        <AllPoolsStats />
 
         <ActivityPreview />
       </MainContainer>

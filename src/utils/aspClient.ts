@@ -1,6 +1,21 @@
 import { getConstants } from '~/config/constants';
 import { MtRootResponse, PoolResponse, MtLeavesResponse, DepositsByLabelResponse, AllEventsResponse } from '~/types';
 
+// Define type for pool stats response
+interface PoolStats {
+  scope: string;
+  totalInPoolValue: string;
+  totalDepositsValue: string;
+  acceptedDepositsValue: string;
+  totalDepositsCount: number;
+  acceptedDepositsCount: number;
+}
+
+interface PoolStatsResponse {
+  pools?: PoolStats[];
+  [scope: string]: PoolStats | PoolStats[] | undefined;
+}
+
 const { ITEMS_PER_PAGE } = getConstants();
 
 const fetchWithHeaders = async <T>(url: string, headers?: Record<string, string>): Promise<T> => {
@@ -40,6 +55,10 @@ const aspClient = {
     fetchWithHeaders<MtLeavesResponse>(`${aspUrl}/${chainId}/public/mt-leaves`, {
       'X-Pool-Scope': scope,
     }),
+
+  fetchPoolStats: (aspUrl: string, chainId: number) =>
+    fetchWithHeaders<PoolStatsResponse>(`${aspUrl}/${chainId}/public/pools-stats`),
 };
 
 export { aspClient };
+export type { PoolStats, PoolStatsResponse };

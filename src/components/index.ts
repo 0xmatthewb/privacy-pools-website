@@ -15,6 +15,8 @@ export * from './StatusChip';
 export * from './Logo';
 export * from './ExtendedTooltip';
 export * from './AssetSelect';
+export * from './DepositAssetSelect';
+export * from './WithdrawAssetSelect';
 export * from './NewsletterSubscriptionModal';
 export * from './SafeApp';
 export * from './FeatureFlagInitializer';
