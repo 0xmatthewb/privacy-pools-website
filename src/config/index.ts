@@ -10,3 +10,4 @@ export const getConfig = (): Config => ({
 });
 
 export * from './chainData';
+export * from './metadata';

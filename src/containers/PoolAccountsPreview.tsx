@@ -3,13 +3,14 @@
 import { useRouter } from 'next/navigation';
 import { Stack, Typography, Button, styled } from '@mui/material';
 import { formatUnits } from 'viem';
-import { AssetSelect, PoolAccountTable } from '~/components';
+import { AssetSelect } from '~/components';
 import { InfoTooltip } from '~/components/InfoTooltip';
 import { Section, PAContainer, EthText, Subtitle, ActionMenuContainer } from '~/containers';
 import { useAuthContext, useGoTo, useModal, useAccountContext, useAdvancedView, useChainContext } from '~/hooks';
 import { ModalType } from '~/types';
 import { ROUTER } from '~/utils';
 import { ActionMenu } from './ActionMenu';
+import { UserPoolsStats } from './UserPoolsStats';
 
 export const PoolAccountsPreview = () => {
   const { push } = useRouter();
@@ -126,7 +127,7 @@ export const PoolAccountsPreview = () => {
 
         {isLogged && (
           <>
-            <PoolAccountTable records={previewPoolAccounts} />
+            <UserPoolsStats />
 
             <ActionMenuContainer>
               <ActionMenu />
