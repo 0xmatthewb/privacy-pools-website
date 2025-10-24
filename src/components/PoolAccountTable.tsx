@@ -127,7 +127,7 @@ export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
 
   return (
     <>
-      {!!poolAccounts.length && (
+      {!!records?.length && (
         <STableContainer>
           <Table>
             <TableHead>
@@ -141,7 +141,7 @@ export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
             </TableHead>
 
             <TableBody>
-              {records?.map((row) => (
+              {records.map((row) => (
                 <STableRow key={row.label.toString() + row.lastCommitment.hash}>
                   {/* Temporary hardcoded pool account identifier */}
                   <STableCell sx={{ paddingLeft: 0 }}>{`PA-${row.name}`}</STableCell>
