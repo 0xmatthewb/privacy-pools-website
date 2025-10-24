@@ -3,14 +3,17 @@
 import { styled } from '@mui/material';
 import { SafeAppWrapper } from '~/components';
 import { ActivityPreview, AllPoolsStats, GlobalPool, PoolAccountsPreview } from '~/containers';
+import { useAuthContext } from '~/hooks';
 
 export const Main = () => {
+  const { isConnected } = useAuthContext();
+
   return (
     <SafeAppWrapper>
       <MainContainer>
         <PoolAccountsPreview />
 
-        <GlobalPool />
+        {!isConnected && <GlobalPool />}
 
         <AllPoolsStats />
 

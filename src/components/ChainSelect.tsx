@@ -42,10 +42,16 @@ export const ChainSelect = () => {
     handleClose();
   };
 
+  const currentChain = chainData[chainId];
+
+  if (!currentChain) {
+    return null;
+  }
+
   return (
     <>
       <SIconButton ref={buttonRef} open={open} onClick={handleToggle} data-testid='chain-select-button'>
-        <Image src={chainData[chainId].image} alt='menu' width={16} height={16} />
+        <Image src={currentChain.image} alt='menu' width={16} height={16} />
       </SIconButton>
 
       <SMenu
