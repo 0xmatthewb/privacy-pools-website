@@ -22,13 +22,21 @@ import {
   AlertTitle,
   IconButton,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { formatUnits, parseUnits, erc20Abi, encodeFunctionData } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
+import { getConfig } from '~/config';
 import { getConstants } from '~/config/constants';
 import { useChainContext, useModal, usePoolAccountsContext, useStakingFeature, useNotifications } from '~/hooks';
 import { ModalType } from '~/types';
-import { formatDataNumber, getUsdBalance, calculateAspFee, calculateInitialDeposit, entrypointAbi } from '~/utils';
+import {
+  formatDataNumber,
+  getUsdBalance,
+  calculateAspFee,
+  calculateInitialDeposit,
+  entrypointAbi,
+  aspClient,
+} from '~/utils';
 import { getStakedTokenPreview } from '~/utils/alternativeTokenDeposit';
 import { getBestYieldOpportunity, formatAPY } from '~/utils/poolUtils';
 import { fetchSUSDSAPY } from '~/utils/sUSDSYield';
@@ -72,6 +80,48 @@ export const DepositForm = () => {
     }
     return true;
   });
+
+  // Fetch TVL data for all pools on the current chain (same as AllPoolsStats)
+  const aspUrl = getConfig().env.ASP_ENDPOINT;
+  const poolTVLQueries = useQueries({
+    queries: chain.poolInfo.map((pool) => ({
+      queryKey: ['asp_pool_info', chainId, pool.scope.toString(), aspUrl],
+      queryFn: () => aspClient.fetchPoolInfo(aspUrl, chainId, pool.scope.toString()),
+      refetchInterval: 120000,
+      staleTime: 60000,
+      retryOnMount: false,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    })),
+  });
+
+  // Build a map of TVL by asset (same structure as AllPoolsStats)
+  const tvlByAsset = useMemo(() => {
+    const map = new Map<string, { tvl: bigint; decimals: number; isLoading: boolean }>();
+    poolTVLQueries.forEach((query, index) => {
+      const pool = chain.poolInfo[index];
+      const totalFunds = query.data?.totalInPoolValue ? BigInt(query.data.totalInPoolValue) : BigInt(0);
+
+      console.log('TVL Debug:', {
+        asset: pool.asset,
+        isLoading: query.isLoading,
+        isSuccess: query.isSuccess,
+        isError: query.isError,
+        error: query.error,
+        hasData: !!query.data,
+        totalInPoolValue: query.data?.totalInPoolValue,
+        totalFunds: totalFunds.toString(),
+      });
+
+      map.set(pool.asset, {
+        tvl: totalFunds,
+        decimals: pool.assetDecimals || 18,
+        isLoading: query.isLoading,
+      });
+    });
+    return map;
+  }, [poolTVLQueries, chain.poolInfo]);
 
   // Find yield opportunities for current token (only when staking is enabled)
   const yieldOpportunity = isStakingEnabled
@@ -387,29 +437,6 @@ export const DepositForm = () => {
     setModalOpen(ModalType.REVIEW);
   };
 
-  const chainIcon = useMemo(() => {
-    const iconSrc = selectedAlternativeToken ? selectedAlternativeToken.tokenIcon : selectedPoolInfo?.icon;
-    const tokenSymbol = selectedAlternativeToken ? selectedAlternativeToken.tokenSymbol : symbol;
-
-    if (selectedPoolInfo?.asset === 'ETH' && !selectedAlternativeToken) {
-      return <CoinIcon />;
-    }
-
-    if (iconSrc) {
-      return (
-        <ImageContainer>
-          <Image src={iconSrc} alt={tokenSymbol} width={54} height={34} />
-        </ImageContainer>
-      );
-    }
-
-    return (
-      <ImageContainer>
-        <span style={{ width: '5.4rem', height: '5.4rem', backgroundColor: 'transparent' }}></span>
-      </ImageContainer>
-    );
-  }, [selectedPoolInfo?.asset, selectedPoolInfo?.icon, symbol, selectedAlternativeToken]);
-
   // Handle switching to yield-generating pool
   const handleSwitchToYieldDeposit = () => {
     if (yieldOpportunity) {
@@ -559,72 +586,117 @@ export const DepositForm = () => {
       )}
 
       <InputContainer>
-        <Stack alignItems='center' flexDirection='column' width='100%'>
-          <Stack direction='row' gap='0.8rem' alignItems='center' width='100%'>
-            {chainIcon}
+        <Stack direction='row' justifyContent='space-between' alignItems='flex-start' width='100%'>
+          <Stack flexDirection='column' flex={1} gap='0.4rem'>
+            <AmountInput
+              id='amount'
+              variant='outlined'
+              placeholder='0'
+              value={inputAmount}
+              error={amountHasError}
+              onChange={handleAmountChange}
+              data-testid='deposit-input'
+            />
+            <UsdAmountText>
+              {inputAmount && !isNaN(Number(inputAmount))
+                ? `$${(Number(inputAmount) * currentPrice).toFixed(2)}`
+                : '$0.00'}
+            </UsdAmountText>
+          </Stack>
 
-            <FormControl className='amount-input'>
-              <AmountInput
-                id='amount'
-                variant='outlined'
-                placeholder='0'
-                value={inputAmount}
-                error={amountHasError}
-                onChange={handleAmountChange}
-                data-testid='deposit-input'
-              />
-              <MaxButton onClick={handleUseMax} disableElevation variant='text'>
-                Use Max
-              </MaxButton>
-            </FormControl>
-
-            <TokenSelectorContainer>
-              <FormControl>
-                <TokenSelect
-                  value={displaySymbol}
-                  onChange={(e) => {
-                    // Handle token change if needed
-                    const newToken = e.target.value;
-                    if (selectedPoolInfo?.alternativeTokens) {
-                      const altToken = selectedPoolInfo.alternativeTokens.find((t) => t.tokenSymbol === newToken);
-                      if (altToken) {
-                        setSelectedToken('alternative');
-                        setSelectedAlternativeToken(altToken);
-                      } else {
-                        setSelectedToken('native');
-                        setSelectedAlternativeToken(null);
-                      }
-                      setInputAmount('');
-                    }
-                  }}
-                  displayEmpty
-                  renderValue={(value) => (
+          <TokenSelectorContainer>
+            <FormControl>
+              <TokenSelect
+                value={selectedPoolInfo?.asset || ''}
+                onChange={(e) => {
+                  const selectedAsset = e.target.value;
+                  // Switch to the selected pool
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  setSelectedAsset(selectedAsset as any);
+                  // Reset alternative token selection
+                  setSelectedAlternativeToken(null);
+                  setSelectedToken('native');
+                  // Reset amount
+                  setInputAmount('');
+                }}
+                displayEmpty
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      minWidth: '288px',
+                    },
+                  },
+                }}
+                renderValue={(value) => {
+                  const pool = chain.poolInfo.find((p) => p.asset === value);
+                  return (
                     <Stack direction='row' alignItems='center' gap='8px'>
-                      {selectedPoolInfo?.icon ? (
-                        <Image src={selectedPoolInfo.icon} alt={String(value)} width={20} height={20} />
+                      {pool?.icon ? (
+                        <Image src={pool.icon} alt={String(value)} width={20} height={20} />
                       ) : (
                         <Box width='20px' height='20px' />
                       )}
                       <Typography>{String(value)}</Typography>
                     </Stack>
-                  )}
-                >
-                  <MenuItem value={selectedPoolInfo?.asset}>{selectedPoolInfo?.asset}</MenuItem>
-                  {isStakingEnabled &&
-                    selectedPoolInfo?.alternativeTokens?.map((token) => (
-                      <MenuItem key={token.tokenSymbol} value={token.tokenSymbol}>
-                        {token.tokenSymbol}
-                      </MenuItem>
-                    ))}
-                </TokenSelect>
-              </FormControl>
-              <BalanceText>
-                Bal: {balanceUI} {displaySymbol}
-              </BalanceText>
-            </TokenSelectorContainer>
-          </Stack>
-          {isDepositDisabled && <FormHelperText error>{errorMessage}</FormHelperText>}
+                  );
+                }}
+              >
+                {chain.poolInfo.map((pool) => {
+                  const poolTVLData = tvlByAsset.get(pool.asset);
+                  const tvlFormatted =
+                    poolTVLData && !poolTVLData.isLoading && poolTVLData.tvl > 0n
+                      ? (() => {
+                          const tvlInToken = Number(formatUnits(poolTVLData.tvl, poolTVLData.decimals));
+                          // Convert to USD using rough price estimates
+                          let priceUSD = 1; // Default for stablecoins
+                          if (
+                            pool.asset === 'ETH' ||
+                            pool.asset === 'WETH' ||
+                            pool.asset === 'wstETH' ||
+                            pool.asset === 'WOETH'
+                          ) {
+                            priceUSD = 2500; // ETH price
+                          } else if (pool.asset === 'wBTC') {
+                            priceUSD = 40000; // BTC price
+                          }
+                          const tvlUSD = tvlInToken * priceUSD;
+
+                          if (tvlUSD >= 1000000) {
+                            return `${(tvlUSD / 1000000).toFixed(1)}M`;
+                          } else if (tvlUSD >= 1000) {
+                            return `${(tvlUSD / 1000).toFixed(1)}K`;
+                          } else {
+                            return tvlUSD.toFixed(0);
+                          }
+                        })()
+                      : poolTVLData?.isLoading
+                        ? '...'
+                        : '0';
+
+                  return (
+                    <MenuItem key={pool.asset} value={pool.asset}>
+                      <Stack direction='row' alignItems='center' justifyContent='space-between' width='100%' gap='16px'>
+                        <Stack direction='row' alignItems='center' gap='8px'>
+                          {pool.icon && <Image src={pool.icon} alt={pool.asset} width={32} height={32} />}
+                          <Typography fontSize='16px' fontWeight={500}>
+                            {pool.asset}
+                          </Typography>
+                        </Stack>
+                        <Typography fontSize='14px' fontWeight={400} color='#999' whiteSpace='nowrap'>
+                          TVL: {tvlFormatted}
+                        </Typography>
+                      </Stack>
+                    </MenuItem>
+                  );
+                })}
+              </TokenSelect>
+            </FormControl>
+            <BalanceText onClick={handleUseMax} style={{ cursor: 'pointer' }}>
+              Bal: {balanceUI} {displaySymbol}
+            </BalanceText>
+          </TokenSelectorContainer>
         </Stack>
+        {isDepositDisabled && <FormHelperText error>{errorMessage}</FormHelperText>}
       </InputContainer>
 
       {/* ASP Selector */}
@@ -708,22 +780,10 @@ export const MaxButton = styled(Button)(({ theme }) => {
 export const InputContainer = styled(Stack)(({ theme }) => {
   return {
     border: '1px solid #D9D9D9',
+    borderRadius: '8px',
     backgroundColor: theme.palette.background.default,
     padding: '1.6rem',
     width: '100%',
-    gap: '1.6rem',
-
-    '.amount-input': {
-      display: 'flex',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      width: '100%',
-      height: 'fit-content',
-      borderRadius: '4px',
-      border: '1px solid #B8BBBF',
-      padding: '0.9rem 1.2rem 1rem',
-    },
   };
 });
 
@@ -732,7 +792,8 @@ export const AmountInput = styled(TextField)(() => {
     padding: '0',
     width: '100%',
     '& .MuiOutlinedInput-root': {
-      fontSize: '1.6rem',
+      fontSize: '3.2rem',
+      fontWeight: 400,
       width: '100%',
       borderRadius: 0,
       padding: 0,
@@ -746,6 +807,9 @@ export const AmountInput = styled(TextField)(() => {
       '&.Mui-focused fieldset': {
         border: 'none',
       },
+    },
+    '& input::placeholder': {
+      opacity: 0.5,
     },
   };
 });
@@ -836,4 +900,14 @@ const BalanceText = styled(Typography)(({ theme }) => ({
   fontWeight: 400,
   color: theme.palette.grey[600],
   whiteSpace: 'nowrap',
+  textAlign: 'right',
+  '&:hover': {
+    textDecoration: 'underline',
+  },
+}));
+
+const UsdAmountText = styled(Typography)(({ theme }) => ({
+  fontSize: '14px',
+  fontWeight: 400,
+  color: theme.palette.grey[600],
 }));
