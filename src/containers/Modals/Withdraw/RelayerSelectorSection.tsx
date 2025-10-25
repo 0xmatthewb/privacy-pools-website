@@ -74,7 +74,7 @@ export const RelayerSelectorSection = ({
       </FormControl>
 
       {/* Fee Details */}
-      <Stack direction='column' alignItems='center' gap={0.5}>
+      <Stack direction='column' alignItems='flex-start' gap={0.5} width='100%'>
         <Stack direction='row' alignItems='center' gap={1}>
           {isQuoteLoading && <CircularProgress size={16} />}
           <Typography
