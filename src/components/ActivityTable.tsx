@@ -10,7 +10,7 @@ import {
   STableRow,
   StatusChip,
 } from '~/components';
-import { getConfig } from '~/config';
+import { chainData, getConfig } from '~/config';
 import { usePoolAccountsContext, useModal, useChainContext, useAccountContext } from '~/hooks';
 import { ActivityRecords, HistoryData, ModalType, ReviewStatus } from '~/types';
 import { formatDataNumber, getTimeAgo, getStatus } from '~/utils';
@@ -49,6 +49,17 @@ export const ActivityTable = ({
   };
 
   const formatAmount = (row: ActivityRecords[number]) => {
+    // For personal activity, look up the pool info by scope to get correct asset symbol and decimals
+    if (view === 'personal' && 'scope' in row) {
+      // Find the pool info by scope across all chains
+      for (const chain of Object.values(chainData)) {
+        const poolInfo = chain.poolInfo.find((p) => p.scope === row.scope);
+        if (poolInfo) {
+          return `${formatDataNumber(BigInt(getAmount(row) || 0), poolInfo.assetDecimals || 18, 3, false, true, false)} ${poolInfo.asset}`;
+        }
+      }
+    }
+    // Fallback to current pool's symbol for global activity
     return `${formatDataNumber(BigInt(getAmount(row) || 0), assetDecimals || decimals, 3, false, true, false)} ${symbol}`;
   };
 
@@ -102,10 +113,25 @@ export const ActivityTable = ({
                   {/* Value */}
                   <STableCell>
                     <Tooltip
-                      title={formatUnits(
-                        getAmount(row as ActivityRecords[number]) as bigint,
-                        assetDecimals || decimals,
-                      )}
+                      title={(() => {
+                        // For personal activity, look up the correct decimals by scope
+                        if (view === 'personal' && 'scope' in row) {
+                          for (const chain of Object.values(chainData)) {
+                            const poolInfo = chain.poolInfo.find((p) => p.scope === row.scope);
+                            if (poolInfo) {
+                              return formatUnits(
+                                getAmount(row as ActivityRecords[number]) as bigint,
+                                poolInfo.assetDecimals || 18,
+                              );
+                            }
+                          }
+                        }
+                        // Fallback to current pool's decimals
+                        return formatUnits(
+                          getAmount(row as ActivityRecords[number]) as bigint,
+                          assetDecimals || decimals,
+                        );
+                      })()}
                       placement='top'
                       disableInteractive
                     >
