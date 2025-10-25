@@ -577,14 +577,54 @@ export const DepositForm = () => {
                 Use Max
               </MaxButton>
             </FormControl>
+
+            <TokenSelectorContainer>
+              <FormControl>
+                <TokenSelect
+                  value={displaySymbol}
+                  onChange={(e) => {
+                    // Handle token change if needed
+                    const newToken = e.target.value;
+                    if (selectedPoolInfo?.alternativeTokens) {
+                      const altToken = selectedPoolInfo.alternativeTokens.find((t) => t.tokenSymbol === newToken);
+                      if (altToken) {
+                        setSelectedToken('alternative');
+                        setSelectedAlternativeToken(altToken);
+                      } else {
+                        setSelectedToken('native');
+                        setSelectedAlternativeToken(null);
+                      }
+                      setInputAmount('');
+                    }
+                  }}
+                  displayEmpty
+                  renderValue={(value) => (
+                    <Stack direction='row' alignItems='center' gap='8px'>
+                      {selectedPoolInfo?.icon ? (
+                        <Image src={selectedPoolInfo.icon} alt={String(value)} width={20} height={20} />
+                      ) : (
+                        <Box width='20px' height='20px' />
+                      )}
+                      <Typography>{String(value)}</Typography>
+                    </Stack>
+                  )}
+                >
+                  <MenuItem value={selectedPoolInfo?.asset}>{selectedPoolInfo?.asset}</MenuItem>
+                  {isStakingEnabled &&
+                    selectedPoolInfo?.alternativeTokens?.map((token) => (
+                      <MenuItem key={token.tokenSymbol} value={token.tokenSymbol}>
+                        {token.tokenSymbol}
+                      </MenuItem>
+                    ))}
+                </TokenSelect>
+              </FormControl>
+              <BalanceText>
+                Bal: {balanceUI} {displaySymbol}
+              </BalanceText>
+            </TokenSelectorContainer>
           </Stack>
           {isDepositDisabled && <FormHelperText error>{errorMessage}</FormHelperText>}
         </Stack>
-
-        <BalanceContainer>
-          <Typography variant='body1' fontWeight='bold'>{`${balanceUI} ${displaySymbol}`}</Typography>
-          <Typography variant='body1'>in your wallet</Typography>
-        </BalanceContainer>
       </InputContainer>
 
       {/* ASP Selector */}
@@ -710,20 +750,6 @@ export const AmountInput = styled(TextField)(() => {
   };
 });
 
-const BalanceContainer = styled(Stack)(() => {
-  return {
-    display: 'flex',
-    flexDirection: 'row',
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: '0.4rem',
-    p: {
-      fontSize: '1.4rem',
-    },
-  };
-});
-
 const DecorativeCircle = styled(Box)(({ theme }) => {
   return {
     width: '647px',
@@ -773,3 +799,41 @@ export const ImageContainer = styled(Box)(({ theme }) => {
     zIndex: 1,
   };
 });
+
+const TokenSelectorContainer = styled(Stack)(() => ({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-end',
+  gap: '4px',
+  minWidth: '150px',
+}));
+
+const TokenSelect = styled(Select)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  border: `1px solid ${theme.palette.grey[300]}`,
+  borderRadius: '8px',
+  fontSize: '14px',
+  fontWeight: 500,
+  '& .MuiSelect-select': {
+    padding: '8px 12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    border: 'none',
+  },
+  '&:hover': {
+    borderColor: theme.palette.grey[400],
+  },
+  '&.Mui-focused': {
+    borderColor: theme.palette.primary.main,
+  },
+}));
+
+const BalanceText = styled(Typography)(({ theme }) => ({
+  fontSize: '12px',
+  fontWeight: 400,
+  color: theme.palette.grey[600],
+  whiteSpace: 'nowrap',
+}));
