@@ -47,6 +47,7 @@ export type PoolResponse = {
   totalDepositsCount: number;
   acceptedDepositsCount: number;
   recentEvents: (DepositEvent | WithdrawalEvent)[];
+  growth24h?: number | null; // Pool value growth percentage over the past 24 hours
 };
 
 export type MtRootResponse = {
