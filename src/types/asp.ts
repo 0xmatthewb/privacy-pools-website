@@ -41,8 +41,11 @@ export type PoolResponse = {
     token: string;
     tokenAddr: string; // ("0x000" if default currency for chain, like ETH)
   };
+  totalDepositsValueUsd?: string;
   totalDepositsValue: string; // bigint
+  totalInPoolValueUsd?: string;
   totalInPoolValue: string; // bigint
+  acceptedDepositsValueUsd?: string;
   acceptedDepositsValue: string; // bigint
   totalDepositsCount: number;
   acceptedDepositsCount: number;
