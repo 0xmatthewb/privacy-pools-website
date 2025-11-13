@@ -6,22 +6,30 @@ import { Copy, Checkmark } from '@carbon/icons-react';
 import {
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   FormControl,
+  FormControlLabel,
+  MenuItem,
+  Select,
   SelectChangeEvent,
   Stack,
   styled,
   TextField,
   Avatar,
   Tooltip,
+  Typography,
   useTheme,
 } from '@mui/material';
+import { useQueries } from '@tanstack/react-query';
 import { Address, formatUnits, isAddress, parseUnits } from 'viem';
 import { useEnsAddress, useEnsAvatar, useEnsName } from 'wagmi';
-import { CoinIcon, ImageContainer, InputContainer, ModalContainer, ModalTitle } from '~/containers/Modals/Deposit';
+import { chainData, getConfig } from '~/config';
+import { ModalContainer, ModalTitle } from '~/containers/Modals/Deposit';
+import { useQuoteContext } from '~/contexts/QuoteContext';
 import { useChainContext, useAccountContext, useModal, usePoolAccountsContext, useNotifications } from '~/hooks';
 import { ModalType } from '~/types';
-import { getUsdBalance, relayerClient, truncateAddress, useClipboard } from '~/utils';
+import { aspClient, getUsdBalance, relayerClient, truncateAddress, useClipboard } from '~/utils';
 import { LinksSection } from '../LinksSection';
 import { AmountInputSection } from './AmountInputSection';
 import { PoolAccountSelectorSection } from './PoolAccountSelectorSection';
@@ -42,10 +50,59 @@ export const WithdrawForm = () => {
     setSelectedRelayer,
     relayersData,
     price: currentPrice,
+    setSelectedAsset,
   } = useChainContext();
 
   const { amount, setAmount, target, setTarget, poolAccount, setPoolAccount } = usePoolAccountsContext();
   const { poolAccounts } = useAccountContext();
+  const { setExtraGas } = useQuoteContext();
+
+  const aspUrl = getConfig().env.ASP_ENDPOINT;
+  const chain = chainData[chainId];
+
+  // Fetch TVL for all pools
+  const poolTVLQueries = useQueries({
+    queries: chain.poolInfo.map((pool) => ({
+      queryKey: ['asp_pool_info', chainId, pool.scope.toString(), aspUrl],
+      queryFn: () => aspClient.fetchPoolInfo(aspUrl, chainId, pool.scope.toString()),
+      refetchInterval: 120000,
+      staleTime: 60000,
+      retryOnMount: false,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    })),
+  });
+
+  // Build TVL map by asset
+  const tvlByAsset = useMemo(() => {
+    const map = new Map<string, { tvlUSD: number; isLoading: boolean }>();
+
+    chain.poolInfo.forEach((pool, index) => {
+      const query = poolTVLQueries[index];
+      const isLoading = query.isLoading;
+
+      if (query.data) {
+        const totalInPoolValue = BigInt(query.data.totalInPoolValue || 0);
+        const tvlInToken = Number(formatUnits(totalInPoolValue, pool.assetDecimals || 18));
+
+        let priceUSD = 1;
+        const assetLower = pool.asset.toLowerCase();
+        if (assetLower === 'eth' || assetLower === 'weth' || assetLower === 'wsteth' || assetLower === 'woeth') {
+          priceUSD = 2500;
+        } else if (assetLower === 'wbtc') {
+          priceUSD = 40000;
+        }
+
+        const tvlUSD = tvlInToken * priceUSD;
+        map.set(pool.asset, { tvlUSD, isLoading: false });
+      } else {
+        map.set(pool.asset, { tvlUSD: 0, isLoading });
+      }
+    });
+
+    return map;
+  }, [poolTVLQueries, chain.poolInfo]);
 
   const decimals = selectedPoolInfo?.assetDecimals ?? balanceDecimals ?? 18;
   const filteredPoolAccounts = poolAccounts.filter((pa) => pa.balance > 0n);
@@ -54,6 +111,7 @@ export const WithdrawForm = () => {
   const [minWithdrawAmount, setMinWithdrawAmount] = useState<bigint | null>(null);
   const [isLoadingMinAmount, setIsLoadingMinAmount] = useState(false);
   const [targetAddressHasError, setTargetAddressHasError] = useState(false);
+  const [receiveGasToken, setReceiveGasToken] = useState(false);
 
   // ENS-related state
   const [inputValue, setInputValue] = useState<string>(target);
@@ -357,6 +415,14 @@ export const WithdrawForm = () => {
     setSelectedRelayer(newRelayer ? { name: newRelayer.name, url: newRelayer.url } : undefined);
   };
 
+  const handlePoolChange = (e: SelectChangeEvent<unknown>) => {
+    const selectedAsset = e.target.value as string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setSelectedAsset(selectedAsset as any);
+    setAmount('');
+    setPoolAccount(undefined);
+  };
+
   const handleUseMax = useCallback(() => {
     if (poolAccount?.balance) {
       setAmount(formatUnits(poolAccount.balance, decimals));
@@ -364,29 +430,11 @@ export const WithdrawForm = () => {
   }, [poolAccount, setAmount, decimals]);
 
   const handleWithdraw = useCallback(() => {
+    // Set extraGas based on checkbox state
+    setExtraGas(receiveGasToken);
     // Go directly to Review screen - quote will be requested there
     setModalOpen(ModalType.REVIEW);
-  }, [setModalOpen]);
-
-  const assetIcon = useMemo(() => {
-    if (selectedPoolInfo?.asset === 'ETH') {
-      return <CoinIcon />;
-    }
-
-    if (selectedPoolInfo?.icon) {
-      return (
-        <ImageContainer>
-          <Image src={selectedPoolInfo.icon} alt={symbol} width={54} height={34} />
-        </ImageContainer>
-      );
-    }
-
-    return (
-      <ImageContainer>
-        <span style={{ width: '5.4rem', height: '5.4rem', backgroundColor: 'transparent' }}></span>
-      </ImageContainer>
-    );
-  }, [selectedPoolInfo?.asset, selectedPoolInfo?.icon, symbol]);
+  }, [setModalOpen, setExtraGas, receiveGasToken]);
 
   return (
     <ModalContainer>
@@ -394,21 +442,51 @@ export const WithdrawForm = () => {
 
       <DecorativeCircle />
 
-      <InputContainer>
-        <AmountInputSection
-          amount={amount}
-          errorMessage={errorMessage}
-          handleAmountChange={handleAmountChange}
-          handleUseMax={handleUseMax}
-          balanceFormatted={balanceFormatted}
-          symbol={symbol}
-          poolAccountName={poolAccount?.name?.toString()}
-          balanceUSD={balanceUSD}
-          chainIcon={assetIcon}
-        />
-      </InputContainer>
+      <Stack gap={2} width='100%' maxWidth='47rem' zIndex='1'>
+        {/* Pool Selector */}
+        <FormControl fullWidth>
+          <PoolSelect value={selectedPoolInfo?.asset || ''} onChange={handlePoolChange} displayEmpty>
+            {chain.poolInfo.map((pool) => {
+              const poolTVLData = tvlByAsset.get(pool.asset);
+              const tvlUSD = poolTVLData?.tvlUSD || 0;
+              const isLoading = poolTVLData?.isLoading || false;
 
-      <Stack gap={2} width='100%' maxWidth='32.8rem' zIndex='1'>
+              let tvlFormatted = '...';
+              if (!isLoading) {
+                if (tvlUSD >= 1_000_000) {
+                  tvlFormatted = `$${(tvlUSD / 1_000_000).toFixed(1)}M`;
+                } else if (tvlUSD >= 1_000) {
+                  tvlFormatted = `$${(tvlUSD / 1_000).toFixed(1)}K`;
+                } else {
+                  tvlFormatted = `$${tvlUSD.toFixed(0)}`;
+                }
+              }
+
+              return (
+                <MenuItem key={pool.asset} value={pool.asset}>
+                  <Stack direction='row' justifyContent='space-between' width='100%'>
+                    <Stack direction='row' alignItems='center' gap='8px'>
+                      {pool.icon && <Image src={pool.icon} alt={pool.asset} width={32} height={32} />}
+                      <Typography fontSize='16px' fontWeight={500}>
+                        {pool.asset}
+                      </Typography>
+                    </Stack>
+                    <Typography color='#999'>TVL: {tvlFormatted}</Typography>
+                  </Stack>
+                </MenuItem>
+              );
+            })}
+          </PoolSelect>
+        </FormControl>
+
+        <PoolAccountSelectorSection
+          poolAccountName={poolAccount?.name?.toString()}
+          handlePoolAccountChange={handlePoolAccountChange}
+          filteredPoolAccounts={filteredPoolAccounts}
+          decimals={decimals}
+          symbol={symbol}
+        />
+
         <FormControl fullWidth>
           <Box sx={{ position: 'relative' }}>
             <TextField
@@ -440,12 +518,16 @@ export const WithdrawForm = () => {
           </Box>
         </FormControl>
 
-        <PoolAccountSelectorSection
-          poolAccountName={poolAccount?.name?.toString()}
-          handlePoolAccountChange={handlePoolAccountChange}
-          filteredPoolAccounts={filteredPoolAccounts}
-          decimals={decimals}
+        <AmountInputSection
+          amount={amount}
+          errorMessage={errorMessage}
+          handleAmountChange={handleAmountChange}
+          handleUseMax={handleUseMax}
+          balanceFormatted={balanceFormatted}
           symbol={symbol}
+          poolAccountName={poolAccount?.name?.toString()}
+          balanceUSD={balanceUSD}
+          currentPrice={currentPrice}
         />
 
         <RelayerSelectorSection
@@ -458,6 +540,22 @@ export const WithdrawForm = () => {
           isQuoteValid={false}
           countdown={0}
         />
+
+        {selectedPoolInfo?.isStableAsset &&
+          selectedPoolInfo?.asset !== 'FRXUSD' &&
+          selectedPoolInfo?.asset !== 'WOETH' && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={receiveGasToken}
+                  onChange={(e) => setReceiveGasToken(e.target.checked)}
+                  size='small'
+                />
+              }
+              label='Receive some Gas Token'
+              sx={{ alignSelf: 'flex-start', marginLeft: 0 }}
+            />
+          )}
       </Stack>
 
       <Button
@@ -488,4 +586,15 @@ const DecorativeCircle = styled(Box)(() => {
     top: '84%',
   };
 });
-// (moved above)
+
+const PoolSelect = styled(Select)(() => ({
+  width: '100%',
+  '& .MuiSelect-select': {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  '& .MuiMenu-paper': {
+    minWidth: '288px',
+  },
+}));

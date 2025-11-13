@@ -22,13 +22,21 @@ import {
   AlertTitle,
   IconButton,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { formatUnits, parseUnits, erc20Abi, encodeFunctionData } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
+import { getConfig } from '~/config';
 import { getConstants } from '~/config/constants';
 import { useChainContext, useModal, usePoolAccountsContext, useStakingFeature, useNotifications } from '~/hooks';
 import { ModalType } from '~/types';
-import { formatDataNumber, getUsdBalance, calculateAspFee, calculateInitialDeposit, entrypointAbi } from '~/utils';
+import {
+  formatDataNumber,
+  getUsdBalance,
+  calculateAspFee,
+  calculateInitialDeposit,
+  entrypointAbi,
+  aspClient,
+} from '~/utils';
 import { getStakedTokenPreview } from '~/utils/alternativeTokenDeposit';
 import { getBestYieldOpportunity, formatAPY } from '~/utils/poolUtils';
 import { fetchSUSDSAPY } from '~/utils/sUSDSYield';
@@ -72,6 +80,37 @@ export const DepositForm = () => {
     }
     return true;
   });
+
+  // Fetch TVL data for all pools on the current chain (same as AllPoolsStats)
+  const aspUrl = getConfig().env.ASP_ENDPOINT;
+  const poolTVLQueries = useQueries({
+    queries: chain.poolInfo.map((pool) => ({
+      queryKey: ['asp_pool_info', chainId, pool.scope.toString(), aspUrl],
+      queryFn: () => aspClient.fetchPoolInfo(aspUrl, chainId, pool.scope.toString()),
+      refetchInterval: 120000,
+      staleTime: 60000,
+      retryOnMount: false,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    })),
+  });
+
+  // Build a map of TVL by asset (same structure as AllPoolsStats)
+  const tvlByAsset = useMemo(() => {
+    const map = new Map<string, { tvl: bigint; decimals: number; isLoading: boolean }>();
+    poolTVLQueries.forEach((query, index) => {
+      const pool = chain.poolInfo[index];
+      const totalFunds = query.data?.totalInPoolValue ? BigInt(query.data.totalInPoolValue) : BigInt(0);
+
+      map.set(pool.asset, {
+        tvl: totalFunds,
+        decimals: pool.assetDecimals || 18,
+        isLoading: query.isLoading,
+      });
+    });
+    return map;
+  }, [poolTVLQueries, chain.poolInfo]);
 
   // Find yield opportunities for current token (only when staking is enabled)
   const yieldOpportunity = isStakingEnabled
@@ -387,29 +426,6 @@ export const DepositForm = () => {
     setModalOpen(ModalType.REVIEW);
   };
 
-  const chainIcon = useMemo(() => {
-    const iconSrc = selectedAlternativeToken ? selectedAlternativeToken.tokenIcon : selectedPoolInfo?.icon;
-    const tokenSymbol = selectedAlternativeToken ? selectedAlternativeToken.tokenSymbol : symbol;
-
-    if (selectedPoolInfo?.asset === 'ETH' && !selectedAlternativeToken) {
-      return <CoinIcon />;
-    }
-
-    if (iconSrc) {
-      return (
-        <ImageContainer>
-          <Image src={iconSrc} alt={tokenSymbol} width={54} height={34} />
-        </ImageContainer>
-      );
-    }
-
-    return (
-      <ImageContainer>
-        <span style={{ width: '5.4rem', height: '5.4rem', backgroundColor: 'transparent' }}></span>
-      </ImageContainer>
-    );
-  }, [selectedPoolInfo?.asset, selectedPoolInfo?.icon, symbol, selectedAlternativeToken]);
-
   // Handle switching to yield-generating pool
   const handleSwitchToYieldDeposit = () => {
     if (yieldOpportunity) {
@@ -559,32 +575,117 @@ export const DepositForm = () => {
       )}
 
       <InputContainer>
-        <Stack alignItems='center' flexDirection='column' width='100%'>
-          <Stack direction='row' gap='0.8rem' alignItems='center' width='100%'>
-            {chainIcon}
-
-            <FormControl className='amount-input'>
-              <AmountInput
-                id='amount'
-                variant='outlined'
-                placeholder='0'
-                value={inputAmount}
-                error={amountHasError}
-                onChange={handleAmountChange}
-                data-testid='deposit-input'
-              />
-              <MaxButton onClick={handleUseMax} disableElevation variant='text'>
-                Use Max
-              </MaxButton>
-            </FormControl>
+        <Stack direction='row' justifyContent='space-between' alignItems='flex-start' width='100%'>
+          <Stack flexDirection='column' flex={1} gap='0.4rem'>
+            <AmountInput
+              id='amount'
+              variant='outlined'
+              placeholder='0'
+              value={inputAmount}
+              error={amountHasError}
+              onChange={handleAmountChange}
+              data-testid='deposit-input'
+            />
+            <UsdAmountText>
+              {inputAmount && !isNaN(Number(inputAmount))
+                ? `$${(Number(inputAmount) * currentPrice).toFixed(2)}`
+                : '$0.00'}
+            </UsdAmountText>
           </Stack>
-          {isDepositDisabled && <FormHelperText error>{errorMessage}</FormHelperText>}
-        </Stack>
 
-        <BalanceContainer>
-          <Typography variant='body1' fontWeight='bold'>{`${balanceUI} ${displaySymbol}`}</Typography>
-          <Typography variant='body1'>in your wallet</Typography>
-        </BalanceContainer>
+          <TokenSelectorContainer>
+            <FormControl>
+              <TokenSelect
+                value={selectedPoolInfo?.asset || ''}
+                onChange={(e) => {
+                  const selectedAsset = e.target.value;
+                  // Switch to the selected pool
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  setSelectedAsset(selectedAsset as any);
+                  // Reset alternative token selection
+                  setSelectedAlternativeToken(null);
+                  setSelectedToken('native');
+                  // Reset amount
+                  setInputAmount('');
+                }}
+                displayEmpty
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      minWidth: '288px',
+                    },
+                  },
+                }}
+                renderValue={(value) => {
+                  const pool = chain.poolInfo.find((p) => p.asset === value);
+                  return (
+                    <Stack direction='row' alignItems='center' gap='8px'>
+                      {pool?.icon ? (
+                        <Image src={pool.icon} alt={String(value)} width={20} height={20} />
+                      ) : (
+                        <Box width='20px' height='20px' />
+                      )}
+                      <Typography>{String(value)}</Typography>
+                    </Stack>
+                  );
+                }}
+              >
+                {chain.poolInfo.map((pool) => {
+                  const poolTVLData = tvlByAsset.get(pool.asset);
+                  const tvlFormatted =
+                    poolTVLData && !poolTVLData.isLoading && poolTVLData.tvl > 0n
+                      ? (() => {
+                          const tvlInToken = Number(formatUnits(poolTVLData.tvl, poolTVLData.decimals));
+                          // Convert to USD using rough price estimates
+                          let priceUSD = 1; // Default for stablecoins
+                          if (
+                            pool.asset === 'ETH' ||
+                            pool.asset === 'WETH' ||
+                            pool.asset === 'wstETH' ||
+                            pool.asset === 'WOETH'
+                          ) {
+                            priceUSD = 2500; // ETH price
+                          } else if (pool.asset === 'wBTC') {
+                            priceUSD = 40000; // BTC price
+                          }
+                          const tvlUSD = tvlInToken * priceUSD;
+
+                          if (tvlUSD >= 1000000) {
+                            return `${(tvlUSD / 1000000).toFixed(1)}M`;
+                          } else if (tvlUSD >= 1000) {
+                            return `${(tvlUSD / 1000).toFixed(1)}K`;
+                          } else {
+                            return tvlUSD.toFixed(0);
+                          }
+                        })()
+                      : poolTVLData?.isLoading
+                        ? '...'
+                        : '0';
+
+                  return (
+                    <MenuItem key={pool.asset} value={pool.asset}>
+                      <Stack direction='row' alignItems='center' justifyContent='space-between' width='100%' gap='16px'>
+                        <Stack direction='row' alignItems='center' gap='8px'>
+                          {pool.icon && <Image src={pool.icon} alt={pool.asset} width={32} height={32} />}
+                          <Typography fontSize='16px' fontWeight={500}>
+                            {pool.asset}
+                          </Typography>
+                        </Stack>
+                        <Typography fontSize='14px' fontWeight={400} color='#999' whiteSpace='nowrap'>
+                          TVL: {tvlFormatted}
+                        </Typography>
+                      </Stack>
+                    </MenuItem>
+                  );
+                })}
+              </TokenSelect>
+            </FormControl>
+            <BalanceText onClick={handleUseMax} style={{ cursor: 'pointer' }}>
+              Bal: {balanceUI} {displaySymbol}
+            </BalanceText>
+          </TokenSelectorContainer>
+        </Stack>
+        {isDepositDisabled && <FormHelperText error>{errorMessage}</FormHelperText>}
       </InputContainer>
 
       {/* ASP Selector */}
@@ -668,22 +769,10 @@ export const MaxButton = styled(Button)(({ theme }) => {
 export const InputContainer = styled(Stack)(({ theme }) => {
   return {
     border: '1px solid #D9D9D9',
+    borderRadius: '8px',
     backgroundColor: theme.palette.background.default,
     padding: '1.6rem',
     width: '100%',
-    gap: '1.6rem',
-
-    '.amount-input': {
-      display: 'flex',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      width: '100%',
-      height: 'fit-content',
-      borderRadius: '4px',
-      border: '1px solid #B8BBBF',
-      padding: '0.9rem 1.2rem 1rem',
-    },
   };
 });
 
@@ -692,7 +781,8 @@ export const AmountInput = styled(TextField)(() => {
     padding: '0',
     width: '100%',
     '& .MuiOutlinedInput-root': {
-      fontSize: '1.6rem',
+      fontSize: '3.2rem',
+      fontWeight: 400,
       width: '100%',
       borderRadius: 0,
       padding: 0,
@@ -707,19 +797,8 @@ export const AmountInput = styled(TextField)(() => {
         border: 'none',
       },
     },
-  };
-});
-
-const BalanceContainer = styled(Stack)(() => {
-  return {
-    display: 'flex',
-    flexDirection: 'row',
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: '0.4rem',
-    p: {
-      fontSize: '1.4rem',
+    '& input::placeholder': {
+      opacity: 0.5,
     },
   };
 });
@@ -773,3 +852,51 @@ export const ImageContainer = styled(Box)(({ theme }) => {
     zIndex: 1,
   };
 });
+
+const TokenSelectorContainer = styled(Stack)(() => ({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-end',
+  gap: '4px',
+  minWidth: '150px',
+}));
+
+const TokenSelect = styled(Select)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  border: `1px solid ${theme.palette.grey[300]}`,
+  borderRadius: '8px',
+  fontSize: '14px',
+  fontWeight: 500,
+  '& .MuiSelect-select': {
+    padding: '8px 12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    border: 'none',
+  },
+  '&:hover': {
+    borderColor: theme.palette.grey[400],
+  },
+  '&.Mui-focused': {
+    borderColor: theme.palette.primary.main,
+  },
+}));
+
+const BalanceText = styled(Typography)(({ theme }) => ({
+  fontSize: '12px',
+  fontWeight: 400,
+  color: theme.palette.grey[600],
+  whiteSpace: 'nowrap',
+  textAlign: 'right',
+  '&:hover': {
+    textDecoration: 'underline',
+  },
+}));
+
+const UsdAmountText = styled(Typography)(({ theme }) => ({
+  fontSize: '14px',
+  fontWeight: 400,
+  color: theme.palette.grey[600],
+}));

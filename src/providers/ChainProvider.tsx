@@ -79,12 +79,15 @@ export const ChainProvider = ({ children }: Props) => {
   }, []);
   const notificationShownRef = useRef(false);
 
-  const chain = useMemo(() => chainData[chainId], [chainId]);
+  const chain = useMemo(() => chainData[chainId] || chainData[whitelistedChains[0].id], [chainId]);
 
   // Find the pool info based on the selected asset
   const selectedPoolInfo = useMemo(() => {
+    if (!chain?.poolInfo || chain.poolInfo.length === 0) {
+      return {} as PoolInfo;
+    }
     return chain.poolInfo.find((pool) => pool.asset === selectedAsset) ?? chain.poolInfo[0];
-  }, [chain.poolInfo, selectedAsset]);
+  }, [chain, selectedAsset]);
 
   // User balance based on the selected asset
   const { data: userBalance } = useBalance({

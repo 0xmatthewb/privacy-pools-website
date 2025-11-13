@@ -41,12 +41,16 @@ export type PoolResponse = {
     token: string;
     tokenAddr: string; // ("0x000" if default currency for chain, like ETH)
   };
+  totalDepositsValueUsd?: string;
   totalDepositsValue: string; // bigint
+  totalInPoolValueUsd?: string;
   totalInPoolValue: string; // bigint
+  acceptedDepositsValueUsd?: string;
   acceptedDepositsValue: string; // bigint
   totalDepositsCount: number;
   acceptedDepositsCount: number;
   recentEvents: (DepositEvent | WithdrawalEvent)[];
+  growth24h?: number | null; // Pool value growth percentage over the past 24 hours
 };
 
 export type MtRootResponse = {

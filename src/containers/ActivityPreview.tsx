@@ -1,23 +1,72 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Button, Stack, styled, Theme, Typography } from '@mui/material';
 import { useAccount } from 'wagmi';
 import { ActivityTable } from '~/components';
 import { InfoTooltip } from '~/components/InfoTooltip';
 import { ViewAllButton, ViewAllText } from '~/containers';
-import { useAdvancedView } from '~/hooks';
+import { useAccountContext, useAdvancedView } from '~/hooks';
+import { EventType, ReviewStatus } from '~/types';
 import { ROUTER } from '~/utils';
 
 export const ActivityPreview = () => {
   const { push } = useRouter();
   const { address } = useAccount();
-  const { previewGlobalEvents, previewPersonalActivity, isLoading } = useAdvancedView();
+  const { previewGlobalEvents, isLoading } = useAdvancedView();
+  const { poolAccountsByChainScope } = useAccountContext();
 
   const [view, setView] = useState<'global' | 'personal'>('global');
 
-  const historyData = view === 'global' ? previewGlobalEvents : previewPersonalActivity;
+  // Build ALL personal activity from all pools (not filtered by selectedPoolInfo)
+  const allPersonalActivity = useMemo(() => {
+    const history = [];
+
+    // Get all pool accounts from all chains/scopes
+    for (const poolAccounts of Object.values(poolAccountsByChainScope)) {
+      for (const pa of poolAccounts) {
+        history.push({
+          type: EventType.DEPOSIT,
+          txHash: pa.deposit.txHash,
+          reviewStatus: pa.reviewStatus,
+          amount: pa.deposit.value,
+          timestamp: Number(pa.deposit.timestamp),
+          label: pa.label,
+          scope: pa.scope,
+        });
+
+        for (const [idx, child] of pa.children.entries()) {
+          history.push({
+            type: EventType.WITHDRAWAL,
+            txHash: child.txHash,
+            reviewStatus: ReviewStatus.APPROVED,
+            amount: (idx === 0 ? pa.deposit.value : pa.children[idx - 1].value) - child.value,
+            timestamp: Number(child.timestamp),
+            label: child.label,
+            scope: pa.scope,
+          });
+        }
+      }
+
+      for (const { ragequit, scope } of poolAccounts) {
+        if (!ragequit?.transactionHash) continue;
+        history.push({
+          type: EventType.EXIT,
+          txHash: ragequit?.transactionHash,
+          reviewStatus: ReviewStatus.APPROVED,
+          amount: ragequit?.value,
+          timestamp: Number(ragequit?.timestamp),
+          label: ragequit?.label,
+          scope: scope,
+        });
+      }
+    }
+
+    return history.sort((a, b) => b.timestamp - a.timestamp).slice(0, 6);
+  }, [poolAccountsByChainScope]);
+
+  const historyData = view === 'global' ? previewGlobalEvents : allPersonalActivity;
 
   const handleNavigateToPoolAccounts = () => {
     if (view === 'personal') {

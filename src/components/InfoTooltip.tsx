@@ -8,7 +8,15 @@ import { ExtendedTooltip } from '~/components';
 import infoIconHover from '~/assets/icons/info-hover.svg';
 import infoIcon from '~/assets/icons/info.svg';
 
-export const InfoTooltip = ({ message }: { message: string }) => {
+export const InfoTooltip = ({
+  message,
+  iconWidth = 16,
+  iconHeight = 16,
+}: {
+  message: string;
+  iconWidth?: number;
+  iconHeight?: number;
+}) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -22,7 +30,7 @@ export const InfoTooltip = ({ message }: { message: string }) => {
       onOpen={() => setIsOpen(true)}
       onClose={() => setIsOpen(false)}
     >
-      <Image src={isOpen ? infoIconHover : infoIcon} alt='info' />
+      <Image src={isOpen ? infoIconHover : infoIcon} alt='info' width={iconWidth} height={iconHeight} />
     </STooltip>
   );
 };
