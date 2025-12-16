@@ -23,6 +23,11 @@ export type Event = {
   createdAt: string;
   updatedAt: string;
   reviewStatus: ReviewStatus;
+  type: string;
+  amount: string;
+  address: string;
+  timestamp: number;
+  precommitmentHash?: string;
 };
 
 export type DepositEvent = Event & {

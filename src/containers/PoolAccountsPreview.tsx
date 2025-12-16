@@ -1,38 +1,36 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useState, useMemo } from 'react';
 import { Stack, Typography, Button, styled } from '@mui/material';
-import { formatUnits } from 'viem';
-import { AssetSelect, PoolAccountTable } from '~/components';
 import { InfoTooltip } from '~/components/InfoTooltip';
-import { Section, PAContainer, EthText, Subtitle, ActionMenuContainer } from '~/containers';
-import { useAuthContext, useGoTo, useModal, useAccountContext, useAdvancedView, useChainContext } from '~/hooks';
+import { chainData } from '~/config';
+import { Section, PAContainer, ActionMenuContainer } from '~/containers';
+import { useAuthContext, useGoTo, useModal, useAccountContext } from '~/hooks';
 import { ModalType } from '~/types';
 import { ROUTER } from '~/utils';
 import { ActionMenu } from './ActionMenu';
+import { ChainFilterSelect } from './ChainFilterSelect';
+import { UserPoolsStats } from './UserPoolsStats';
 
 export const PoolAccountsPreview = () => {
-  const { push } = useRouter();
-  const {
-    balanceBN: { symbol, decimals },
-    selectedPoolInfo: { assetDecimals },
-  } = useChainContext();
-  const {
-    poolsByAssetAndChain,
-    allPools,
-    amountPoolAsset,
-    pendingAmountPoolAsset,
-    hideEmptyPools,
-    toggleHideEmptyPools,
-  } = useAccountContext();
-  const { previewPoolAccounts } = useAdvancedView();
+  const { allPools, poolAccountsByChainScope } = useAccountContext();
   const { setModalOpen } = useModal();
-  const { isLogged, isConnected, isAuthorized } = useAuthContext();
+  const { isLogged, isConnected } = useAuthContext();
   const goTo = useGoTo();
+  const [selectedChainIds, setSelectedChainIds] = useState<number[]>([]);
 
-  const handleShowEmptyPools = () => {
-    toggleHideEmptyPools();
-  };
+  // Get unique chain IDs from user's pool accounts
+  const availableChainIds = useMemo(() => {
+    const chainIds = new Set<number>();
+    for (const [key] of Object.entries(poolAccountsByChainScope)) {
+      const [chainIdStr] = key.split('-');
+      const chainId = parseInt(chainIdStr, 10);
+      if (chainData[chainId]) {
+        chainIds.add(chainId);
+      }
+    }
+    return Array.from(chainIds);
+  }, [poolAccountsByChainScope]);
 
   const handleLogin = () => {
     goTo(ROUTER.account.base);
@@ -42,91 +40,35 @@ export const PoolAccountsPreview = () => {
     setModalOpen(ModalType.CONNECT);
   };
 
-  const handleNavigateToPoolAccounts = () => {
-    push(ROUTER.poolAccounts.base);
-  };
-
   return (
     <>
       <PAContainer>
         <Section width='100%'>
-          <Stack
-            direction='row'
-            justifyContent='space-between'
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
-            width='100%'
-          >
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              alignItems={{ xs: 'flex-start', sm: 'center' }}
-              gap={1}
-              width='100%'
-            >
-              <Stack direction='row' alignItems='center' gap={1}>
-                <Typography variant='subtitle1' fontWeight='bold' lineHeight='1' whiteSpace='nowrap'>
-                  Pool Accounts
+          <Stack direction='row' alignItems='center' justifyContent='space-between' width='100%'>
+            <Stack direction='row' alignItems='center' gap={1}>
+              <Typography variant='subtitle1' fontWeight='bold' lineHeight='1' whiteSpace='nowrap'>
+                {isConnected ? 'My Pools' : 'Pool Accounts'}
+              </Typography>
+              {isLogged && allPools > 0 && (
+                <Typography variant='caption' fontWeight='bold' mt='0.2rem'>
+                  ({allPools})
                 </Typography>
-                {isLogged && allPools > 0 && (
-                  <Typography variant='caption' fontWeight='bold' mt='0.2rem'>
-                    ({allPools})
-                  </Typography>
-                )}
-                <InfoTooltip message='These are your active deposits in Privacy Pools and their status.' />
-              </Stack>
-
-              <Stack direction='row' alignItems='center' gap={1} width='12rem'>
-                <AssetSelect />
-              </Stack>
-            </Stack>
-
-            <Stack
-              direction={{ xs: 'column-reverse', sm: 'row' }}
-              alignItems={{ xs: 'flex-end', sm: 'center' }}
-              gap={1}
-              width='100%'
-              justifyContent='flex-end'
-            >
-              {previewPoolAccounts.length > 0 && (
-                <ViewAllButton onClick={handleShowEmptyPools} disabled={!poolsByAssetAndChain.length}>
-                  <ViewAllText>{hideEmptyPools ? 'Show' : 'Hide'} empty pools</ViewAllText>
-                </ViewAllButton>
               )}
-
-              {isAuthorized && previewPoolAccounts.length > 0 && (
-                <ViewAllButton
-                  onClick={handleNavigateToPoolAccounts}
-                  disabled={poolsByAssetAndChain && !poolsByAssetAndChain.length}
-                >
-                  <ViewAllText>View All</ViewAllText>
-                </ViewAllButton>
-              )}
+              <InfoTooltip message='These are your active deposits in Privacy Pools and their status.' />
             </Stack>
+            {isLogged && availableChainIds.length > 1 && (
+              <ChainFilterSelect
+                availableChainIds={availableChainIds}
+                selectedChainIds={selectedChainIds}
+                onSelectionChange={setSelectedChainIds}
+              />
+            )}
           </Stack>
-
-          {isLogged && (
-            <Stack flexDirection='row' justifyContent='space-between' width='100%'>
-              <Stack width='50%' gap={1}>
-                <Subtitle variant='caption'>Available:</Subtitle>
-                <EthText variant='subtitle1' fontWeight='bold'>
-                  {formatUnits(amountPoolAsset, assetDecimals || decimals)}
-                  <span> {symbol}</span>
-                </EthText>
-              </Stack>
-
-              <Stack width='50%' gap={1}>
-                <Subtitle variant='caption'>Being validated:</Subtitle>
-                <EthText variant='subtitle1' fontWeight='bold'>
-                  {formatUnits(pendingAmountPoolAsset, assetDecimals || decimals)}
-                  <span> {symbol}</span>
-                </EthText>
-              </Stack>
-            </Stack>
-          )}
         </Section>
 
         {isLogged && (
           <>
-            <PoolAccountTable records={previewPoolAccounts} />
+            <UserPoolsStats selectedChainIds={selectedChainIds} />
 
             <ActionMenuContainer>
               <ActionMenu />

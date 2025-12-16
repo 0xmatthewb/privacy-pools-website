@@ -1,8 +1,12 @@
 import { Address, parseEther, parseUnits } from 'viem';
-import { Chain, mainnet, optimismSepolia, sepolia } from 'viem/chains';
-import { getEnv } from '~/config/env';
+import { arbitrum, base, bsc, Chain, mainnet, optimism, optimismSepolia, sepolia } from 'viem/chains';
+import { getAspEndpointForChain, getEnv } from '~/config/env';
 import { sUSDSAbi } from '~/config/sUSDSAbi';
 import { woethAbi } from '~/config/woethAbi';
+import arbitrumIcon from '~/assets/icons/arbitrum.svg';
+// import baseIcon from '~/assets/icons/base.svg';
+// import bnbIcon from '~/assets/icons/bnb.svg';
+// import bscIcon from '~/assets/icons/bsc.svg';
 import daiIcon from '~/assets/icons/dai.svg';
 import frxusdIcon from '~/assets/icons/frxusd.svg';
 import mainnetIcon from '~/assets/icons/mainnet_color.svg';
@@ -16,11 +20,12 @@ import usdtIcon from '~/assets/icons/usdt.svg';
 import wbtcIcon from '~/assets/icons/wbtc.svg';
 import woethIcon from '~/assets/icons/woeth.svg';
 import wstethIcon from '~/assets/icons/wsteth.svg';
+import yusndIcon from '~/assets/icons/yusnd.svg';
 
-const { ALCHEMY_KEY, IS_TESTNET, ASP_ENDPOINT } = getEnv();
+const { ALCHEMY_KEY, IS_TESTNET, SHOW_TEST_CHAINS } = getEnv();
 
 // Add chains to the whitelist to be used in the app
-const mainnetChains: readonly [Chain, ...Chain[]] = [mainnet];
+const mainnetChains: readonly [Chain, ...Chain[]] = [mainnet, optimism, base, bsc, arbitrum];
 const testnetChains: readonly [Chain, ...Chain[]] = [sepolia, optimismSepolia];
 
 export const whitelistedChains = IS_TESTNET ? testnetChains : mainnetChains;
@@ -37,8 +42,10 @@ export type ChainAssets =
   | 'wBTC'
   | 'USDe'
   | 'USD1'
-  | 'FRXUSD'
-  | 'WOETH';
+  | 'frxUSD'
+  | 'WOETH'
+  | 'BNB'
+  | 'yUSND';
 
 export interface AlternativeTokenConfig {
   tokenAddress: Address;
@@ -68,6 +75,7 @@ export interface PoolInfo {
   asset: ChainAssets;
   assetDecimals?: number;
   icon?: string;
+  color?: string; // Color for charts and visualizations
   isStableAsset?: boolean; // Includes stablecoins and yield-bearing stablecoins
   isNativeToken?: boolean; // True for native tokens (ETH on Ethereum, etc.)
   alternativeTokens?: AlternativeTokenConfig[]; // Allow depositing alternative tokens that get converted
@@ -81,6 +89,7 @@ export interface PoolInfo {
 export interface ChainData {
   [chainId: number]: {
     name: string;
+    mobileName?: string; // Shorter name for mobile displays
     symbol: string;
     decimals: number;
     image: string;
@@ -107,7 +116,7 @@ const mainnetChainData: ChainData = {
     relayers: [{ name: 'Fast Relay', url: 'https://fastrelay.xyz' }],
     sdkRpcUrl: `/api/hypersync-rpc?chainId=1`, // Secure Hypersync proxy (relative URL)
     rpcUrl: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    aspUrl: ASP_ENDPOINT,
+    aspUrl: getAspEndpointForChain(mainnet.id),
     poolInfo: [
       {
         chainId: mainnet.id,
@@ -120,6 +129,7 @@ const mainnetChainData: ChainData = {
         asset: 'ETH',
         assetDecimals: 18,
         icon: mainnetIcon.src,
+        color: '#627EEA',
         isStableAsset: false,
         isNativeToken: true,
       },
@@ -134,6 +144,7 @@ const mainnetChainData: ChainData = {
         asset: 'USDS',
         assetDecimals: 18,
         icon: usdsIcon.src,
+        color: '#4D4D4D',
         isStableAsset: true,
         isNativeToken: false,
       },
@@ -148,6 +159,7 @@ const mainnetChainData: ChainData = {
         asset: 'sUSDS',
         assetDecimals: 18,
         icon: susdsIcon.src,
+        color: '#21C55E',
         isStableAsset: true,
         isNativeToken: false,
         yield: {
@@ -177,6 +189,7 @@ const mainnetChainData: ChainData = {
         asset: 'DAI',
         assetDecimals: 18,
         icon: daiIcon.src,
+        color: '#F5AC37',
         isStableAsset: true,
         isNativeToken: false,
       },
@@ -191,6 +204,7 @@ const mainnetChainData: ChainData = {
         asset: 'USDT',
         assetDecimals: 6,
         icon: usdtIcon.src,
+        color: '#26A17B',
         isStableAsset: true,
         isNativeToken: false,
       },
@@ -205,6 +219,7 @@ const mainnetChainData: ChainData = {
         asset: 'USDC',
         assetDecimals: 6,
         icon: usdcIcon.src,
+        color: '#2775CA',
         isStableAsset: true,
         isNativeToken: false,
       },
@@ -219,6 +234,7 @@ const mainnetChainData: ChainData = {
         asset: 'wstETH',
         assetDecimals: 18,
         icon: wstethIcon.src,
+        color: '#00A3FF',
         isStableAsset: false,
         isNativeToken: false,
       },
@@ -233,6 +249,7 @@ const mainnetChainData: ChainData = {
         asset: 'wBTC',
         assetDecimals: 8,
         icon: wbtcIcon.src,
+        color: '#F7931A',
         isStableAsset: false,
         isNativeToken: false,
       },
@@ -247,6 +264,7 @@ const mainnetChainData: ChainData = {
         asset: 'USDe',
         assetDecimals: 18,
         icon: usdeIcon.src,
+        color: '#000000',
         isStableAsset: true,
         isNativeToken: false,
       },
@@ -261,6 +279,7 @@ const mainnetChainData: ChainData = {
         asset: 'USD1',
         assetDecimals: 18,
         icon: usd1Icon.src,
+        color: '#1E40AF',
         isStableAsset: true,
         isNativeToken: false,
       },
@@ -272,9 +291,10 @@ const mainnetChainData: ChainData = {
         deploymentBlock: 23090335n,
         entryPointAddress: '0x6818809EefCe719E480a7526D76bD3e561526b46',
         maxDeposit: parseUnits('1000000', 18),
-        asset: 'FRXUSD',
+        asset: 'frxUSD',
         assetDecimals: 18,
         icon: frxusdIcon.src,
+        color: '#000000',
         isStableAsset: true,
         isNativeToken: false,
       },
@@ -289,6 +309,7 @@ const mainnetChainData: ChainData = {
         asset: 'WOETH',
         assetDecimals: 18,
         icon: woethIcon.src,
+        color: '#627EEA',
         isStableAsset: false,
         isNativeToken: false,
         priceConversion: {
@@ -297,6 +318,155 @@ const mainnetChainData: ChainData = {
           conversionMethod: 'convertToAssets',
           conversionAbi: woethAbi,
         },
+      },
+    ],
+  },
+  // // Optimism
+  // [optimism.id]: {
+  //   name: optimism.name,
+  //   mobileName: 'Optimism',
+  //   symbol: optimism.nativeCurrency.symbol,
+  //   decimals: optimism.nativeCurrency.decimals,
+  //   image: optimismIcon.src,
+  //   explorerUrl: optimism.blockExplorers.default.url,
+  //   relayers: [{ name: 'Fast Relay', url: 'https://fastrelay.xyz' }],
+  //   sdkRpcUrl: `/api/hypersync-rpc?chainId=10`,
+  //   rpcUrl: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+  //   aspUrl: getAspEndpointForChain(mainnet.id), // Use mainnet ASP
+  //   poolInfo: [
+  //     {
+  //       chainId: optimism.id,
+  //       address: '0x4626A182030D9e98b13f690FFF3C443191a918ff',
+  //       assetAddress: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+  //       scope: 16871220592891773056516988350205562991488723955554544490977388368863952064937n,
+  //       deploymentBlock: 144288142n, // TODO: Set actual deployment block
+  //       entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
+  //       maxDeposit: parseEther('10000'),
+  //       asset: 'ETH',
+  //       assetDecimals: 18,
+  //       icon: mainnetIcon.src,
+  //       color: '#FF0420',
+  //       isStableAsset: false,
+  //       isNativeToken: true,
+  //     },
+  //   ],
+  // },
+  // // Base
+  // [base.id]: {
+  //   name: base.name,
+  //   symbol: base.nativeCurrency.symbol,
+  //   decimals: base.nativeCurrency.decimals,
+  //   image: baseIcon.src,
+  //   explorerUrl: base.blockExplorers.default.url,
+  //   relayers: [{ name: 'Fast Relay', url: 'https://fastrelay.xyz' }],
+  //   sdkRpcUrl: `/api/hypersync-rpc?chainId=8453`,
+  //   rpcUrl: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+  //   aspUrl: getAspEndpointForChain(mainnet.id), // Use mainnet ASP
+  //   poolInfo: [
+  //     {
+  //       chainId: base.id,
+  //       address: '0x4626A182030D9e98b13f690FFF3C443191a918ff',
+  //       assetAddress: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+  //       scope: 17149548501982159915340070383460891962313753442514083724083931901154966978790n,
+  //       deploymentBlock: 38694925n,
+  //       entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
+  //       maxDeposit: parseEther('10000'),
+  //       asset: 'ETH',
+  //       assetDecimals: 18,
+  //       icon: mainnetIcon.src,
+  //       color: '#0052FF',
+  //       isStableAsset: false,
+  //       isNativeToken: true,
+  //     },
+  //   ],
+  // },
+  // // BSC
+  // [bsc.id]: {
+  //   name: bsc.name,
+  //   mobileName: 'BSC',
+  //   symbol: bsc.nativeCurrency.symbol,
+  //   decimals: bsc.nativeCurrency.decimals,
+  //   image: bscIcon.src,
+  //   explorerUrl: bsc.blockExplorers.default.url,
+  //   relayers: [{ name: 'Fast Relay', url: 'https://fastrelay.xyz' }],
+  //   sdkRpcUrl: `/api/hypersync-rpc?chainId=56`,
+  //   rpcUrl: `https://bnb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+  //   aspUrl: getAspEndpointForChain(mainnet.id), // Use mainnet ASP
+  //   poolInfo: [
+  //     {
+  //       chainId: bsc.id,
+  //       address: '0x4626A182030D9e98b13f690FFF3C443191a918ff',
+  //       assetAddress: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+  //       scope: 11123939809302748675379459504943549959694064271441044886820019404791514187711n,
+  //       deploymentBlock: 69568985n,
+  //       entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
+  //       maxDeposit: parseEther('10000'),
+  //       asset: 'BNB',
+  //       assetDecimals: 18,
+  //       icon: bnbIcon.src,
+  //       color: '#F0B90B',
+  //       isStableAsset: false,
+  //       isNativeToken: true,
+  //     },
+  //   ],
+  // },
+  // Arbitrum
+  [arbitrum.id]: {
+    name: arbitrum.name,
+    mobileName: 'Arbitrum',
+    symbol: arbitrum.nativeCurrency.symbol,
+    decimals: arbitrum.nativeCurrency.decimals,
+    image: arbitrumIcon.src,
+    explorerUrl: arbitrum.blockExplorers.default.url,
+    relayers: [{ name: 'Fast Relay', url: 'https://relayer-staging-github-deployed-149184580131.us-east1.run.app' }],
+    sdkRpcUrl: `/api/hypersync-rpc?chainId=42161`,
+    rpcUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+    aspUrl: getAspEndpointForChain(mainnet.id), // Use mainnet ASP
+    poolInfo: [
+      {
+        chainId: arbitrum.id,
+        address: '0x4626A182030D9e98b13f690FFF3C443191a918ff',
+        assetAddress: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+        scope: 8660557530481358570801571473337513404087042974825976936311383951650375938465n,
+        deploymentBlock: 404391809n,
+        entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
+        maxDeposit: parseEther('10000'),
+        asset: 'ETH',
+        assetDecimals: 18,
+        icon: mainnetIcon.src,
+        color: '#28A0F0',
+        isStableAsset: false,
+        isNativeToken: true,
+      },
+      {
+        chainId: arbitrum.id,
+        address: '0xA63e0bdc3A193d1E6e7c9bE72CB502BE4B7fC244',
+        assetAddress: '0x252b965400862d94bda35fecf7ee0f204a53cc36',
+        scope: 17956916590686670424333894019045881907336686995242105023718942216595734953511n,
+        deploymentBlock: 411197625n,
+        entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
+        maxDeposit: parseEther('10000'),
+        asset: 'yUSND',
+        assetDecimals: 18,
+        icon: yusndIcon.src,
+        color: '#28A0F0',
+        isStableAsset: true,
+        isNativeToken: false,
+      },
+      {
+        chainId: arbitrum.id,
+        address: '0x3706e38af05bf0158BCdbB46239f8289980b093f',
+        assetAddress: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+        scope: 19314316433070648921215665277427138450050666275686107272761703472573535400848n,
+        deploymentBlock: 411197154n,
+        entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
+        maxDeposit: parseEther('10000'),
+        asset: 'USDC',
+        assetDecimals: 6,
+        icon: usdcIcon.src,
+        color: '#2775CA',
+        isStableAsset: true,
+        isNativeToken: false,
       },
     ],
   },
@@ -312,7 +482,7 @@ const testnetChainData: ChainData = {
     explorerUrl: sepolia.blockExplorers.default.url,
     sdkRpcUrl: `/api/hypersync-rpc?chainId=11155111`, // Secure Hypersync proxy (relative URL)
     rpcUrl: `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    aspUrl: ASP_ENDPOINT,
+    aspUrl: getAspEndpointForChain(sepolia.id),
     relayers: [
       { name: 'Testnet Relay', url: 'https://testnet-relayer.privacypools.com' },
       { name: 'Freedom Relay', url: 'https://fastrelay.xyz' },
@@ -368,7 +538,7 @@ const testnetChainData: ChainData = {
     explorerUrl: optimismSepolia.blockExplorers.default.url,
     sdkRpcUrl: `/api/hypersync-rpc?chainId=11155420`, // Secure Hypersync proxy (relative URL)
     rpcUrl: `https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    aspUrl: ASP_ENDPOINT,
+    aspUrl: getAspEndpointForChain(optimismSepolia.id),
     relayers: [
       { name: 'Testnet Relay', url: 'https://testnet-relayer.privacypools.com' },
       // { name: 'Freedom Relay', url: 'https://fastrelay.xyz' },
@@ -392,4 +562,24 @@ const testnetChainData: ChainData = {
   },
 };
 
+// Export chain data based on environment
+// For All Pools page: show both mainnet and testnet if SHOW_TEST_CHAINS is true
+// For wallet operations: only show appropriate chains based on IS_TESTNET
 export const chainData = IS_TESTNET ? testnetChainData : mainnetChainData;
+
+// Chain data for All Pools table (includes test chains if SHOW_TEST_CHAINS is enabled)
+export const allPoolsChainData: ChainData = (() => {
+  if (IS_TESTNET) {
+    return testnetChainData;
+  }
+
+  if (SHOW_TEST_CHAINS) {
+    // Combine mainnet and testnet data
+    return {
+      ...mainnetChainData,
+      ...testnetChainData,
+    };
+  }
+
+  return mainnetChainData;
+})();

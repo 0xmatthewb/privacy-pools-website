@@ -1,19 +1,22 @@
 import { Exit, PiggyBank, WatsonHealthRotate_360 } from '@carbon/icons-react';
 import { Button, Stack, styled } from '@mui/material';
-import { formatUnits } from 'viem';
-import { useAccount } from 'wagmi';
-import { useModal, usePoolAccountsContext, useChainContext } from '~/hooks';
+import { useModal, usePoolAccountsContext, useAccountContext } from '~/hooks';
 import { EventType, ModalType, ReviewStatus } from '~/types';
 
 export const DetailButtons = () => {
-  const { address } = useAccount();
   const { setModalOpen } = useModal();
-  const { poolAccount, setTarget, setAmount, setActionType } = usePoolAccountsContext();
-  const {
-    balanceBN: { decimals },
-  } = useChainContext();
-  const isWithdrawDisabled = poolAccount?.balance === 0n || poolAccount?.reviewStatus !== ReviewStatus.APPROVED;
-  const isExitDisabled = poolAccount?.balance === 0n;
+  const { poolAccount, setActionType } = usePoolAccountsContext();
+  const { poolAccounts } = useAccountContext();
+
+  // Check if there are any approved accounts with balance in the current pool
+  const hasApprovedBalance = poolAccounts.some((pa) => pa.balance > 0n && pa.reviewStatus === ReviewStatus.APPROVED);
+  const hasAnyBalance = poolAccounts.some((pa) => pa.balance > 0n);
+
+  // If a specific poolAccount is selected, use that. Otherwise check if any account has balance
+  const isWithdrawDisabled = poolAccount
+    ? poolAccount.balance === 0n || poolAccount.reviewStatus !== ReviewStatus.APPROVED
+    : !hasApprovedBalance;
+  const isExitDisabled = poolAccount ? poolAccount.balance === 0n : !hasAnyBalance;
 
   const handleWithdraw = () => {
     if (isWithdrawDisabled) return;
@@ -26,10 +29,8 @@ export const DetailButtons = () => {
     if (isExitDisabled) return;
     if (!poolAccount) throw new Error('Pool account not found');
 
-    setTarget(address!);
-    setAmount(formatUnits(poolAccount.balance, decimals));
     setActionType(EventType.EXIT);
-    setModalOpen(ModalType.GENERATE_ZK_PROOF);
+    setModalOpen(ModalType.EXIT_CONFIRM);
   };
 
   return (

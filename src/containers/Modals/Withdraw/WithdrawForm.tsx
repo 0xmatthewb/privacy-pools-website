@@ -2,26 +2,35 @@
 
 import { ChangeEvent, FocusEventHandler, useCallback, useMemo, useState, useEffect } from 'react';
 import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import { Copy, Checkmark } from '@carbon/icons-react';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import {
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   FormControl,
+  FormControlLabel,
   SelectChangeEvent,
   Stack,
   styled,
   TextField,
   Avatar,
   Tooltip,
+  Typography,
   useTheme,
 } from '@mui/material';
 import { Address, formatUnits, isAddress, parseUnits } from 'viem';
-import { useEnsAddress, useEnsAvatar, useEnsName } from 'wagmi';
-import { CoinIcon, ImageContainer, InputContainer, ModalContainer, ModalTitle } from '~/containers/Modals/Deposit';
+import { useEnsAddress, useEnsAvatar, useEnsName, useSwitchChain } from 'wagmi';
+import { chainData, allPoolsChainData } from '~/config';
+import { getAspEndpointForChain } from '~/config/env';
+import { ChainTokenSelectorDropdown } from '~/containers/ChainTokenSelector';
+import { ModalContainer, ModalTitle } from '~/containers/Modals/Deposit';
+import { useQuoteContext } from '~/contexts/QuoteContext';
 import { useChainContext, useAccountContext, useModal, usePoolAccountsContext, useNotifications } from '~/hooks';
-import { ModalType } from '~/types';
-import { getUsdBalance, relayerClient, truncateAddress, useClipboard } from '~/utils';
+import { ModalType, ReviewStatus } from '~/types';
+import { aspClient, getUsdBalance, relayerClient, truncateAddress, useClipboard } from '~/utils';
 import { LinksSection } from '../LinksSection';
 import { AmountInputSection } from './AmountInputSection';
 import { PoolAccountSelectorSection } from './PoolAccountSelectorSection';
@@ -33,6 +42,8 @@ export const WithdrawForm = () => {
   const { setModalOpen } = useModal();
   const { addNotification } = useNotifications();
   const theme = useTheme();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const {
     balanceBN: { symbol, decimals: balanceDecimals },
@@ -42,18 +53,47 @@ export const WithdrawForm = () => {
     setSelectedRelayer,
     relayersData,
     price: currentPrice,
+    setSelectedAsset,
+    setChainId,
   } = useChainContext();
 
   const { amount, setAmount, target, setTarget, poolAccount, setPoolAccount } = usePoolAccountsContext();
   const { poolAccounts } = useAccountContext();
+  const { setExtraGas } = useQuoteContext();
+  const { switchChainAsync } = useSwitchChain();
+
+  const [tokenSelectorAnchor, setTokenSelectorAnchor] = useState<HTMLElement | null>(null);
 
   const decimals = selectedPoolInfo?.assetDecimals ?? balanceDecimals ?? 18;
-  const filteredPoolAccounts = poolAccounts.filter((pa) => pa.balance > 0n);
+
+  // Filter pool accounts by current chain, pool scope, and balance > 0
+  const filteredPoolAccounts = useMemo(() => {
+    return poolAccounts.filter(
+      (pa) => pa.balance > 0n && pa.chainId === chainId && pa.scope === selectedPoolInfo?.scope,
+    );
+  }, [poolAccounts, chainId, selectedPoolInfo?.scope]);
+
+  // Auto-select the first pool account when filtered list changes and no account is selected
+  useEffect(() => {
+    const currentAccountStillValid = poolAccount && filteredPoolAccounts.some((pa) => pa.name === poolAccount.name);
+    if (!currentAccountStillValid && filteredPoolAccounts.length > 0) {
+      // Find first approved account
+      const firstApproved = filteredPoolAccounts.find((pa) => pa.reviewStatus === ReviewStatus.APPROVED);
+      if (firstApproved) {
+        setPoolAccount(firstApproved);
+      }
+    }
+  }, [filteredPoolAccounts, poolAccount, setPoolAccount]);
 
   // New state for minimum withdrawal amount and warning
   const [minWithdrawAmount, setMinWithdrawAmount] = useState<bigint | null>(null);
   const [isLoadingMinAmount, setIsLoadingMinAmount] = useState(false);
   const [targetAddressHasError, setTargetAddressHasError] = useState(false);
+  const [receiveGasToken, setReceiveGasToken] = useState(false);
+
+  // Anonymity set state
+  const [anonymitySet, setAnonymitySet] = useState<number | null>(null);
+  const [isLoadingAnonymitySet, setIsLoadingAnonymitySet] = useState(false);
 
   // ENS-related state
   const [inputValue, setInputValue] = useState<string>(target);
@@ -220,6 +260,37 @@ export const WithdrawForm = () => {
     }
   }, [amount, fetchMinWithdrawAmount, minWithdrawAmount, isLoadingMinAmount]);
 
+  // Fetch anonymity set when amount changes
+  useEffect(() => {
+    const fetchAnonymitySet = async () => {
+      if (!amountBN || amountBN <= 0n || !selectedPoolInfo?.scope || !chainId) {
+        setAnonymitySet(null);
+        return;
+      }
+
+      setIsLoadingAnonymitySet(true);
+      try {
+        const aspUrl = getAspEndpointForChain(chainId);
+        const response = await aspClient.fetchDepositsLargerThan(
+          aspUrl,
+          chainId,
+          selectedPoolInfo.scope.toString(),
+          amountBN.toString(),
+        );
+        setAnonymitySet(response.eligibleDeposits);
+      } catch (error) {
+        console.error('Failed to fetch anonymity set:', error);
+        setAnonymitySet(null);
+      } finally {
+        setIsLoadingAnonymitySet(false);
+      }
+    };
+
+    // Debounce the fetch to avoid too many requests while typing
+    const timeoutId = setTimeout(fetchAnonymitySet, 500);
+    return () => clearTimeout(timeoutId);
+  }, [amountBN, selectedPoolInfo?.scope, chainId]);
+
   const isValidAmount = useMemo(() => {
     return amountBN > 0n && amountBN <= (poolAccount?.balance ?? 0n);
   }, [amountBN, poolAccount?.balance]);
@@ -357,6 +428,45 @@ export const WithdrawForm = () => {
     setSelectedRelayer(newRelayer ? { name: newRelayer.name, url: newRelayer.url } : undefined);
   };
 
+  // Handle chain+token selection from dropdown
+  const handleChainTokenSelect = async (selectedChainId: number, selectedAsset: string) => {
+    // Find the selected pool from allPoolsChainData
+    const targetChainData = allPoolsChainData[selectedChainId];
+    if (!targetChainData) return;
+
+    const selectedPool = targetChainData.poolInfo.find((p) => p.asset.toLowerCase() === selectedAsset.toLowerCase());
+
+    if (selectedPool) {
+      // If selecting a pool from a different chain, trigger a wallet chain switch
+      if (selectedChainId !== chainId) {
+        try {
+          addNotification('info', `Switching to ${targetChainData.name}...`);
+          await switchChainAsync({ chainId: selectedChainId });
+          // Update the app's chain context to match the wallet's chain
+          setChainId(selectedChainId);
+          addNotification('success', `Switched to ${targetChainData.name}`);
+        } catch (err) {
+          console.error('Failed to switch chain:', err);
+          addNotification('error', `Please switch to ${targetChainData.name} to withdraw from this pool`);
+          return; // Don't proceed with asset selection if chain switch failed
+        }
+      }
+
+      // Switch to the selected pool asset
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setSelectedAsset(selectedAsset as any);
+
+      // Update URL if on a pool page
+      if (pathname?.startsWith('/pools/')) {
+        router.push(`/pools/${selectedChainId}/${selectedAsset.toLowerCase()}`);
+      }
+    }
+
+    // Reset amount and pool account
+    setAmount('');
+    setPoolAccount(undefined);
+  };
+
   const handleUseMax = useCallback(() => {
     if (poolAccount?.balance) {
       setAmount(formatUnits(poolAccount.balance, decimals));
@@ -364,29 +474,11 @@ export const WithdrawForm = () => {
   }, [poolAccount, setAmount, decimals]);
 
   const handleWithdraw = useCallback(() => {
+    // Set extraGas based on checkbox state
+    setExtraGas(receiveGasToken);
     // Go directly to Review screen - quote will be requested there
     setModalOpen(ModalType.REVIEW);
-  }, [setModalOpen]);
-
-  const assetIcon = useMemo(() => {
-    if (selectedPoolInfo?.asset === 'ETH') {
-      return <CoinIcon />;
-    }
-
-    if (selectedPoolInfo?.icon) {
-      return (
-        <ImageContainer>
-          <Image src={selectedPoolInfo.icon} alt={symbol} width={54} height={34} />
-        </ImageContainer>
-      );
-    }
-
-    return (
-      <ImageContainer>
-        <span style={{ width: '5.4rem', height: '5.4rem', backgroundColor: 'transparent' }}></span>
-      </ImageContainer>
-    );
-  }, [selectedPoolInfo?.asset, selectedPoolInfo?.icon, symbol]);
+  }, [setModalOpen, setExtraGas, receiveGasToken]);
 
   return (
     <ModalContainer>
@@ -394,21 +486,58 @@ export const WithdrawForm = () => {
 
       <DecorativeCircle />
 
-      <InputContainer>
-        <AmountInputSection
-          amount={amount}
-          errorMessage={errorMessage}
-          handleAmountChange={handleAmountChange}
-          handleUseMax={handleUseMax}
-          balanceFormatted={balanceFormatted}
-          symbol={symbol}
-          poolAccountName={poolAccount?.name?.toString()}
-          balanceUSD={balanceUSD}
-          chainIcon={assetIcon}
+      <Stack gap={2} width='100%' maxWidth='47rem' zIndex='1'>
+        {/* Pool Selector */}
+        <TokenSelectorButton onClick={(e) => setTokenSelectorAnchor(e.currentTarget)}>
+          <Stack direction='row' alignItems='center' gap='8px'>
+            <Box sx={{ position: 'relative', width: 24, height: 24 }}>
+              {selectedPoolInfo?.icon && (
+                <Image src={selectedPoolInfo.icon} alt={selectedPoolInfo.asset} width={24} height={24} />
+              )}
+              {chainData[chainId]?.image && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: -2,
+                    right: -2,
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    border: '1px solid #fff',
+                    backgroundColor: '#fff',
+                  }}
+                >
+                  <Image
+                    src={chainData[chainId].image}
+                    alt={chainData[chainId].name}
+                    width={12}
+                    height={12}
+                    style={{ display: 'block' }}
+                  />
+                </Box>
+              )}
+            </Box>
+            <Typography>{selectedPoolInfo?.asset || 'Select Pool'}</Typography>
+          </Stack>
+          <KeyboardArrowDownIcon sx={{ fontSize: 20, color: '#666' }} />
+        </TokenSelectorButton>
+        <ChainTokenSelectorDropdown
+          selectedChainId={chainId}
+          selectedAsset={selectedPoolInfo?.asset || ''}
+          onSelect={handleChainTokenSelect}
+          onClose={() => setTokenSelectorAnchor(null)}
+          anchorEl={tokenSelectorAnchor}
         />
-      </InputContainer>
 
-      <Stack gap={2} width='100%' maxWidth='32.8rem' zIndex='1'>
+        <PoolAccountSelectorSection
+          poolAccountName={poolAccount?.name?.toString()}
+          handlePoolAccountChange={handlePoolAccountChange}
+          filteredPoolAccounts={filteredPoolAccounts}
+          decimals={decimals}
+          symbol={symbol}
+        />
+
         <FormControl fullWidth>
           <Box sx={{ position: 'relative' }}>
             <TextField
@@ -440,12 +569,18 @@ export const WithdrawForm = () => {
           </Box>
         </FormControl>
 
-        <PoolAccountSelectorSection
-          poolAccountName={poolAccount?.name?.toString()}
-          handlePoolAccountChange={handlePoolAccountChange}
-          filteredPoolAccounts={filteredPoolAccounts}
-          decimals={decimals}
+        <AmountInputSection
+          amount={amount}
+          errorMessage={errorMessage}
+          handleAmountChange={handleAmountChange}
+          handleUseMax={handleUseMax}
+          balanceFormatted={balanceFormatted}
           symbol={symbol}
+          poolAccountName={poolAccount?.name?.toString()}
+          balanceUSD={balanceUSD}
+          currentPrice={currentPrice}
+          anonymitySet={anonymitySet}
+          isLoadingAnonymitySet={isLoadingAnonymitySet}
         />
 
         <RelayerSelectorSection
@@ -458,6 +593,22 @@ export const WithdrawForm = () => {
           isQuoteValid={false}
           countdown={0}
         />
+
+        {selectedPoolInfo?.isStableAsset &&
+          selectedPoolInfo?.asset !== 'frxUSD' &&
+          selectedPoolInfo?.asset !== 'WOETH' && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={receiveGasToken}
+                  onChange={(e) => setReceiveGasToken(e.target.checked)}
+                  size='small'
+                />
+              }
+              label='Receive some Gas Token'
+              sx={{ alignSelf: 'flex-start', marginLeft: 0 }}
+            />
+          )}
       </Stack>
 
       <Button
@@ -471,7 +622,7 @@ export const WithdrawForm = () => {
         {!isLoadingMinAmount && 'Review Withdrawal'}
       </Button>
 
-      <LinksSection />
+      <LinksSection context='withdrawal' />
     </ModalContainer>
   );
 };
@@ -488,4 +639,21 @@ const DecorativeCircle = styled(Box)(() => {
     top: '84%',
   };
 });
-// (moved above)
+
+const TokenSelectorButton = styled('button')(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '8px',
+  backgroundColor: theme.palette.background.default,
+  border: `1px solid ${theme.palette.grey[300]}`,
+  borderRadius: '8px',
+  padding: '12px 16px',
+  fontSize: '14px',
+  fontWeight: 500,
+  cursor: 'pointer',
+  width: '100%',
+  '&:hover': {
+    borderColor: theme.palette.grey[400],
+  },
+}));

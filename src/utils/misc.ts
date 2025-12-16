@@ -7,7 +7,7 @@ export const getUsdBalance = (price: number | null, balance: string, decimals: n
   const priceBN = parseUnits(price.toString(), decimals);
   const balanceBN = parseUnits(balance, decimals);
   const result = (priceBN * balanceBN) / BigInt(10 ** decimals);
-  return formatDataNumber(result.toString(), decimals, 2, true, true);
+  return formatDataNumber(result.toString(), decimals, 2, true, false);
 };
 
 /**
@@ -109,8 +109,11 @@ export const calculateRemainingTime = (expiration: number | undefined): number =
  * @param row Activity record with reviewStatus field
  * @returns ReviewStatus value
  */
-export const getStatus = (row: { type?: EventType; reviewStatus?: ReviewStatus | StatusObject }): ReviewStatus => {
-  if (row.type === EventType.WITHDRAWAL) {
+export const getStatus = (row: {
+  type?: EventType | string;
+  reviewStatus?: ReviewStatus | StatusObject;
+}): ReviewStatus => {
+  if (row.type === EventType.WITHDRAWAL || row.type === 'ragequit') {
     return ReviewStatus.APPROVED;
   }
 

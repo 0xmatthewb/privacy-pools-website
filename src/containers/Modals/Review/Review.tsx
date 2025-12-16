@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { Box, Button, CircularProgress, Stack, styled, Switch, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Stack, styled, Typography } from '@mui/material';
 import { parseUnits } from 'viem';
 import { BaseModal } from '~/components';
 import { useQuoteContext } from '~/contexts/QuoteContext';
@@ -31,7 +31,7 @@ export const ReviewModal = () => {
   const { isLoading: isExitLoading } = useExit();
   const { actionType, feeCommitment, amount, target } = usePoolAccountsContext();
   const [isConfirmClicked, setIsConfirmClicked] = useState(false);
-  const { quoteState, setExtraGas } = useQuoteContext();
+  const { quoteState } = useQuoteContext();
 
   // Quote logic for withdrawals
   const {
@@ -82,6 +82,15 @@ export const ReviewModal = () => {
     await requestNewQuote();
   };
 
+  const handleGoBack = () => {
+    if (actionType === EventType.WITHDRAWAL) {
+      setModalOpen(ModalType.WITHDRAW);
+    } else if (actionType === EventType.DEPOSIT) {
+      setModalOpen(ModalType.DEPOSIT);
+    }
+    // For EXIT, we might want to go back to pool details or another modal
+  };
+
   // Reset isConfirmClicked when modal opens or when starting a new action
   useEffect(() => {
     setIsConfirmClicked(false);
@@ -92,31 +101,34 @@ export const ReviewModal = () => {
       <ModalContainer>
         <DecorativeCircle actionType={actionType!} />
 
+        {(actionType === EventType.WITHDRAWAL || actionType === EventType.DEPOSIT) && (
+          <BackButton onClick={handleGoBack}>
+            <svg width='16' height='14' viewBox='0 0 16 14' fill='none' xmlns='http://www.w3.org/2000/svg'>
+              <path
+                d='M6.75 13.25L7.63125 12.3688L2.89375 7.625H15.5V6.375H2.89375L7.63125 1.63125L6.75 0.75L0.5 7L6.75 13.25Z'
+                fill='black'
+              />
+            </svg>
+          </BackButton>
+        )}
+
         <ModalTitle>Review the {actionType}</ModalTitle>
 
         <Stack gap={2} px='1.6rem' width='100%'>
           {actionType === EventType.WITHDRAWAL &&
             selectedPoolInfo?.isStableAsset &&
-            selectedPoolInfo?.asset !== 'FRXUSD' &&
-            selectedPoolInfo?.asset !== 'WOETH' && (
+            selectedPoolInfo?.asset !== 'frxUSD' &&
+            selectedPoolInfo?.asset !== 'WOETH' &&
+            quoteState.extraGas && (
               <GasTokenDropSection>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <InfoIcon />
-                    <Box>
-                      <Typography variant='body1' fontWeight={600}>
-                        Send Gas With Your Withdrawal
-                      </Typography>
-                      <Typography variant='body2' color='text.secondary'>
-                        Get ETH for gas fees (1 swap + 1 transfer)
-                      </Typography>
-                    </Box>
+                    <GasTokenDropTitle variant='body1' fontWeight={600}>
+                      Gas Token Drop
+                    </GasTokenDropTitle>
                   </Box>
-                  <GreenSwitch
-                    checked={quoteState.extraGas}
-                    onChange={(e) => setExtraGas(e.target.checked)}
-                    disabled={isQuoteLoading}
-                  />
+                  <GasTokenDropDescription>Get ETH for gas fees (1 swap + 1 transfer)</GasTokenDropDescription>
                 </Box>
               </GasTokenDropSection>
             )}
@@ -148,7 +160,11 @@ export const ReviewModal = () => {
         )}
         <PoolAccountSection />
 
-        <LinksSection />
+        <LinksSection
+          context={
+            actionType === EventType.EXIT ? 'ragequit' : actionType === EventType.WITHDRAWAL ? 'withdrawal' : 'deposit'
+          }
+        />
       </ModalContainer>
     </BaseModal>
   );
@@ -202,29 +218,41 @@ const PulsingButton = styled(Button)({
   },
 });
 
-const GreenSwitch = styled(Switch)(({ theme }) => ({
-  '& .MuiSwitch-switchBase.Mui-checked': {
-    color: theme.palette.success.main,
-    '&:hover': {
-      backgroundColor: `${theme.palette.success.main}20`,
-    },
-  },
-  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-    backgroundColor: theme.palette.success.main,
-  },
-}));
-
 const GasTokenDropSection = styled(Box)(() => ({
   padding: '1rem 1.5rem',
-  backgroundColor: '#e8f5e9',
-  borderRadius: '8px',
-  border: `1px solid #a5d6a7`,
+  background: 'rgba(223, 236, 198, 0.5)',
+  border: '1px solid #7D9C40',
   margin: '0.5rem 0',
   display: 'flex',
   alignItems: 'center',
 }));
 
 const InfoIcon = styled(InfoOutlinedIcon)(() => ({
-  color: '#66bb6a',
+  color: '#7D9C40',
   fontSize: '20px',
+}));
+
+const GasTokenDropTitle = styled(Typography)(() => ({
+  color: '#7D9C40',
+}));
+
+const GasTokenDropDescription = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '14px',
+  lineHeight: '18px',
+  color: '#000000',
+}));
+
+const BackButton = styled(Box)(() => ({
+  position: 'absolute',
+  top: '2rem',
+  left: '2rem',
+  zIndex: 2,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  '&:hover': {
+    opacity: 0.7,
+  },
 }));

@@ -15,9 +15,11 @@ export const Header = () => {
       <Disclaimer />
 
       <StyledHeader>
-        <Link href='/'>
-          <Logo />
-        </Link>
+        <LeftSection>
+          <Link href='/'>
+            <Logo />
+          </Link>
+        </LeftSection>
         <Actions>
           <ChainSelect />
 
@@ -67,4 +69,10 @@ const Actions = styled('div')({
   justifyContent: 'end',
   alignItems: 'center',
   gap: '1rem',
+});
+
+const LeftSection = styled('div')({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '2.4rem',
 });

@@ -13,7 +13,6 @@ export interface Option {
 
 const ALL_TOKEN_OPTIONS: Option[] = [
   { value: 'ETH', label: 'ETH' },
-  { value: 'FRXUSD', label: 'FRXUSD' },
   { value: 'USDC', label: 'USDC' },
   { value: 'WETH', label: 'WETH' },
   { value: 'wstETH', label: 'wstETH' },
@@ -24,7 +23,9 @@ const ALL_TOKEN_OPTIONS: Option[] = [
   { value: 'sUSDS', label: 'sUSDS' },
   { value: 'USDe', label: 'USDe' },
   { value: 'USD1', label: 'USD1' },
+  { value: 'frxUSD', label: 'frxUSD' },
   { value: 'DAI', label: 'DAI' },
+  { value: 'yUSND', label: 'yUSND' },
 ];
 
 export const AssetSelect: React.FC = () => {

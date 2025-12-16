@@ -26,7 +26,7 @@ import { formatDataNumber, formatTimestamp, getStatus } from '~/utils';
 
 export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
   const { PENDING_STATUS_MESSAGE: statusMessage } = getConstants();
-  const { setActionType, setPoolAccount, setAmount, setTarget } = usePoolAccountsContext();
+  const { setActionType, setPoolAccount } = usePoolAccountsContext();
   const {
     balanceBN: { symbol, decimals },
   } = useChainContext();
@@ -67,11 +67,9 @@ export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
     const foundAccount = poolAccounts.find((pa) => pa.label === poolAccount.label);
     if (!foundAccount) return;
 
-    setTarget(address);
     setPoolAccount(foundAccount);
-    setAmount(formatUnits(poolAccount.balance, decimals));
     setActionType(EventType.EXIT);
-    setModalOpen(ModalType.GENERATE_ZK_PROOF);
+    setModalOpen(ModalType.EXIT_CONFIRM);
     handleClose();
   };
 
@@ -87,6 +85,7 @@ export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
       reviewStatus: poolAccount.reviewStatus,
       label: poolAccount.label,
       scope: poolAccount.scope,
+      chainId: poolAccount.chainId,
     });
     setPoolAccount(foundAccount);
     setModalOpen(ModalType.PA_DETAILS);
@@ -127,7 +126,7 @@ export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
 
   return (
     <>
-      {!!poolAccounts.length && (
+      {!!records?.length && (
         <STableContainer>
           <Table>
             <TableHead>
@@ -141,7 +140,7 @@ export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
             </TableHead>
 
             <TableBody>
-              {records?.map((row) => (
+              {records.map((row) => (
                 <STableRow key={row.label.toString() + row.lastCommitment.hash}>
                   {/* Temporary hardcoded pool account identifier */}
                   <STableCell sx={{ paddingLeft: 0 }}>{`PA-${row.name}`}</STableCell>
