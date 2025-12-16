@@ -84,7 +84,8 @@ export const ActivityTable = ({
   const isPersonalEvents = view === 'personal';
 
   const getPoolAccountName = (row: HistoryData[number]) => {
-    const poolAccount = poolAccounts.find((poolAccount) => poolAccount.label === row.label);
+    // Convert both to strings to handle bigint vs string comparison
+    const poolAccount = poolAccounts.find((poolAccount) => poolAccount.label.toString() === row.label.toString());
     return isPersonalEvents ? (poolAccount ? `PA-${poolAccount.name}` : 'N/A') : 'N/A';
   };
 
