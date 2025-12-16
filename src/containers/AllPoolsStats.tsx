@@ -11,6 +11,7 @@ import {
   MenuItem,
   Select,
   SelectChangeEvent,
+  Skeleton,
   Stack,
   styled,
   TextField,
@@ -184,10 +185,12 @@ const PoolCard = ({
   pool,
   isLeftColumn,
   isFirstRow,
+  isLoading,
 }: {
   pool: PoolCardData;
   isLeftColumn: boolean;
   isFirstRow: boolean;
+  isLoading: boolean;
 }) => {
   const router = useRouter();
 
@@ -233,7 +236,9 @@ const PoolCard = ({
             <ChainName variant='body1'>{pool.chainName}</ChainName>
           </Stack>
         </Stack>
-        {hasGrowth && (
+        {isLoading ? (
+          <Skeleton variant='text' width={100} height={20} animation='wave' />
+        ) : hasGrowth ? (
           <GrowthIndicator positive={isPositiveGrowth}>
             {isPositiveGrowth ? (
               <svg width='16' height='17' viewBox='0 0 16 17' fill='none' xmlns='http://www.w3.org/2000/svg'>
@@ -255,7 +260,7 @@ const PoolCard = ({
             </GrowthPercentage>
             <GrowthTimeframe>past 24h</GrowthTimeframe>
           </GrowthIndicator>
-        )}
+        ) : null}
       </PoolHeader>
 
       <PoolStats>
@@ -271,7 +276,11 @@ const PoolCard = ({
 
       <PoolStatsBottom>
         <Stack direction='row' alignItems='center' gap='4px'>
-          <TotalFundsValue>{totalFundsDisplay}</TotalFundsValue>
+          {isLoading ? (
+            <Skeleton variant='text' width={120} height={31} animation='wave' />
+          ) : (
+            <TotalFundsValue>{totalFundsDisplay}</TotalFundsValue>
+          )}
           <InfoTooltip message='Total funds in the pool' iconWidth={14} iconHeight={14} />
         </Stack>
         {/* HIDDEN: Privacy score bar */}
@@ -293,7 +302,15 @@ const PoolCard = ({
   );
 };
 
-const FundsOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTop?: boolean }) => {
+const FundsOnlyCard = ({
+  pool,
+  hasBorderTop,
+  isLoading,
+}: {
+  pool: PoolCardData;
+  hasBorderTop?: boolean;
+  isLoading: boolean;
+}) => {
   const router = useRouter();
 
   const totalFundsUSD = pool.totalFundsUSD ?? 0;
@@ -333,7 +350,11 @@ const FundsOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTo
 
       <PoolStatsBottom>
         <Stack direction='row' alignItems='center' gap='4px'>
-          <TotalFundsValue>{totalFundsDisplay}</TotalFundsValue>
+          {isLoading ? (
+            <Skeleton variant='text' width={120} height={31} animation='wave' />
+          ) : (
+            <TotalFundsValue>{totalFundsDisplay}</TotalFundsValue>
+          )}
           <InfoTooltip message='Total funds in the pool' iconWidth={14} iconHeight={14} />
         </Stack>
       </PoolStatsBottom>
@@ -341,7 +362,15 @@ const FundsOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTo
   );
 };
 
-const GrowthOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTop?: boolean }) => {
+const GrowthOnlyCard = ({
+  pool,
+  hasBorderTop,
+  isLoading,
+}: {
+  pool: PoolCardData;
+  hasBorderTop?: boolean;
+  isLoading: boolean;
+}) => {
   const router = useRouter();
 
   const hasGrowth = pool.growthPercentage !== undefined && pool.growthPercentage !== 0;
@@ -353,7 +382,9 @@ const GrowthOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderT
 
   return (
     <GrowthOnlyCardContainer onClick={handleClick} hasBorderTop={hasBorderTop}>
-      {hasGrowth ? (
+      {isLoading ? (
+        <Skeleton variant='text' width={100} height={20} animation='wave' />
+      ) : hasGrowth ? (
         <GrowthIndicator positive={isPositiveGrowth}>
           {isPositiveGrowth ? (
             <svg width='16' height='17' viewBox='0 0 16 17' fill='none' xmlns='http://www.w3.org/2000/svg'>
@@ -419,6 +450,9 @@ export const AllPoolsStats = () => {
       },
     ],
   });
+
+  // Check if data is still loading from ASP
+  const isLoadingPoolStats = poolStatsQuery.some((q) => q.isLoading);
 
   // Build a map of pool stats by chainId and scope for easy lookup
   const poolStatsMap = useMemo(() => {
@@ -684,10 +718,10 @@ export const AllPoolsStats = () => {
               return (
                 <React.Fragment key={`${pool.chainId}-${pool.scope}-${index}`}>
                   <Grid item xs={12} sm={6}>
-                    <FundsOnlyCard pool={pool} hasBorderTop={needsBorderTop} />
+                    <FundsOnlyCard pool={pool} hasBorderTop={needsBorderTop} isLoading={isLoadingPoolStats} />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <GrowthOnlyCard pool={pool} hasBorderTop={needsBorderTop} />
+                    <GrowthOnlyCard pool={pool} hasBorderTop={needsBorderTop} isLoading={isLoadingPoolStats} />
                   </Grid>
                 </React.Fragment>
               );
@@ -695,7 +729,12 @@ export const AllPoolsStats = () => {
 
             return (
               <Grid item xs={12} sm={6} key={`${pool.chainId}-${pool.scope}-${index}`}>
-                <PoolCard pool={pool} isLeftColumn={index % 2 === 0} isFirstRow={index < 2} />
+                <PoolCard
+                  pool={pool}
+                  isLeftColumn={index % 2 === 0}
+                  isFirstRow={index < 2}
+                  isLoading={isLoadingPoolStats}
+                />
               </Grid>
             );
           })}
