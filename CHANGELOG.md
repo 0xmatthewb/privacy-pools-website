@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Various bug fixes and performance improvements
 
+## [2.3.0] - 2025-11-13
+
+### Changed
+
+- Bumped position of active pools
+
 ## [2.2.0] - 2025-10-10
 
 ### Added
