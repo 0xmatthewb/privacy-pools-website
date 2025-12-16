@@ -1,7 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Stack, styled, Typography, Divider, Link, Alert, Checkbox, FormControlLabel } from '@mui/material';
+import {
+  Button,
+  Stack,
+  styled,
+  Typography,
+  Divider,
+  Link,
+  Alert,
+  Checkbox,
+  FormControlLabel,
+  keyframes,
+} from '@mui/material';
 import { captureException } from '@sentry/nextjs';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { CloseButton } from '~/components';
@@ -229,6 +240,7 @@ export const Welcome = () => {
                   or I have already downloaded my seedphrase before
                 </Typography>
               }
+              sx={{ position: 'relative', zIndex: 1 }}
             />
 
             <Button
@@ -239,7 +251,13 @@ export const Welcome = () => {
               fullWidth
               sx={{ py: 3 }}
             >
-              {isProceeding ? 'Loading Account...' : 'I Have Saved My Seedphrase - Continue'}
+              {isProceeding ? (
+                <>
+                  Loading Account<AnimatedDots>...</AnimatedDots>
+                </>
+              ) : (
+                'I Have Saved My Seedphrase - Continue'
+              )}
             </Button>
 
             <Button variant='outlined' onClick={handleCancel} fullWidth>
@@ -364,3 +382,28 @@ const WelcomeContainer = styled(Stack)(({ theme }) => ({
     maxWidth: '32rem',
   },
 }));
+
+const dotsAnimation = keyframes`
+  0%, 20% {
+    content: '.';
+  }
+  40% {
+    content: '..';
+  }
+  60%, 100% {
+    content: '...';
+  }
+`;
+
+const AnimatedDots = styled('span')({
+  // Hide the static dots, show only animated ones
+  visibility: 'hidden',
+  position: 'relative',
+  '&::after': {
+    content: '"..."',
+    animation: `${dotsAnimation} 1.5s infinite`,
+    visibility: 'visible',
+    position: 'absolute',
+    left: 0,
+  },
+});

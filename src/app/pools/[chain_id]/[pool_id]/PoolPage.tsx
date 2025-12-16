@@ -1,45 +1,46 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Stack, Typography, Button, styled, Box, Autocomplete, TextField, IconButton, Grid } from '@mui/material';
+import { Stack, Typography, Button, styled, Box, IconButton, Grid } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { formatUnits } from 'viem';
 import { useAccount } from 'wagmi';
 import { PoolAccountTable, ActivityTable } from '~/components';
 import { InfoTooltip } from '~/components/InfoTooltip';
-import { ChainAssets, chainData, getConfig } from '~/config';
-import { Section, PAContainer, ActionMenu } from '~/containers';
-import { useAuthContext, useGoTo, useModal, useAccountContext, useAdvancedView, useChainContext } from '~/hooks';
+import { ChainAssets, chainData } from '~/config';
+import { Section, PAContainer, ActionMenu, ChainTokenSelectorDropdown } from '~/containers';
+import { useAuthContext, useGoTo, useModal, useAccountContext, useChainContext } from '~/hooks';
 import { EventType, ModalType, ReviewStatus } from '~/types';
 import { ROUTER, aspClient } from '~/utils';
-
-interface PoolOption {
-  value: ChainAssets;
-  label: string;
-  chainName: string;
-  icon?: string;
-}
 
 interface PoolPageProps {
   chainId: string;
   poolId: string;
 }
 
+// Format large numbers compactly (e.g., 5,550,000 -> 5.55M)
+const formatCompactNumber = (num: number, decimals = 2): string => {
+  if (num >= 1_000_000_000) {
+    return (num / 1_000_000_000).toFixed(decimals).replace(/\.?0+$/, '') + 'B';
+  }
+  if (num >= 1_000_000) {
+    return (num / 1_000_000).toFixed(decimals).replace(/\.?0+$/, '') + 'M';
+  }
+  if (num >= 100_000) {
+    return (num / 1_000).toFixed(1).replace(/\.?0+$/, '') + 'K';
+  }
+  return Math.round(num).toLocaleString('en-US');
+};
+
 export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   const { push } = useRouter();
   const { address } = useAccount();
-  const aspUrl = getConfig().env.ASP_ENDPOINT;
-  const { setChainId, setSelectedAsset } = useChainContext();
-  const {
-    balanceBN: { symbol, decimals },
-    selectedPoolInfo: { assetDecimals },
-  } = useChainContext();
+  const { setChainId, setSelectedAsset, price } = useChainContext();
   const accountContext = useAccountContext();
   const { poolsByAssetAndChain, amountPoolAsset, hideEmptyPools, toggleHideEmptyPools, poolAccountsByChainScope } =
     accountContext;
-  const { previewGlobalEvents, isLoading: activityLoading } = useAdvancedView();
   const { setModalOpen } = useModal();
   const { isLogged, isConnected, isAuthorized } = useAuthContext();
   const goTo = useGoTo();
@@ -49,18 +50,25 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   const chain = chainData[parsedChainId];
 
   // Activity view state - default to 'personal' if address exists
-  const [activityView, setActivityView] = useState<'global' | 'personal'>(address ? 'personal' : 'global');
+  const [activityView, setActivityView] = useState<'global' | 'personal' | 'stats'>(address ? 'personal' : 'global');
 
   // Fetch pool info for this specific pool
-  const poolScope = useMemo(() => {
-    const matchedPool = chain?.poolInfo.find((p) => p.asset.toLowerCase() === poolId.toLowerCase());
-    return matchedPool?.scope.toString();
+  const currentPoolInfo = useMemo(() => {
+    return chain?.poolInfo.find((p) => p.asset.toLowerCase() === poolId.toLowerCase());
   }, [poolId, chain]);
+
+  const poolScope = currentPoolInfo?.scope.toString();
+
+  // Use decimals directly from the current pool config to avoid stale context values
+  const poolDecimals = currentPoolInfo?.assetDecimals || 18;
+
+  // Get the ASP URL for this chain
+  const aspUrl = chainData[parsedChainId]?.aspUrl;
 
   const { data: poolData } = useQuery({
     queryKey: ['pool_info', parsedChainId, poolScope, aspUrl],
     queryFn: () => aspClient.fetchPoolInfo(aspUrl, parsedChainId, poolScope || ''),
-    enabled: !!poolScope,
+    enabled: !!poolScope && !!aspUrl,
     refetchInterval: 120000, // Increased to 2 minutes
     staleTime: 60000, // Consider data fresh for 60 seconds
     refetchOnMount: false,
@@ -68,30 +76,82 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
     refetchOnReconnect: false,
   });
 
-  // Calculate stats
-  const acceptedFunds = useMemo(() => {
+  // Fetch pool stats to get pendingDepositsValueUsd
+  const { data: poolStatsData } = useQuery({
+    queryKey: ['pool_stats', parsedChainId, aspUrl],
+    queryFn: () => aspClient.fetchPoolStats(aspUrl, parsedChainId),
+    enabled: !!poolScope && !!aspUrl,
+    refetchInterval: 120000,
+    staleTime: 60000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  // Fetch pool-specific events for the activity feed
+  const { data: poolEventsData, isLoading: poolEventsLoading } = useQuery({
+    queryKey: ['pool_events', parsedChainId, poolScope, aspUrl],
+    queryFn: () => aspClient.fetchAllEvents(aspUrl, parsedChainId, poolScope || '', 1, 6),
+    enabled: !!poolScope && !!aspUrl,
+    refetchInterval: 60000,
+    staleTime: 30000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  // Fetch pool statistics for the Stats tab (All Time + Last 24h)
+  const { data: poolStatisticsData } = useQuery({
+    queryKey: ['pool_statistics', parsedChainId, poolScope, aspUrl],
+    queryFn: () => aspClient.fetchPoolStatistics(aspUrl, parsedChainId, poolScope || ''),
+    enabled: !!poolScope && !!aspUrl,
+    refetchInterval: 60000,
+    staleTime: 30000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  // Get the current pool's stats from the pools array
+  const currentPoolStats = useMemo(() => {
+    if (!poolStatsData?.pools || !poolScope) return null;
+    return poolStatsData.pools.find((pool) => pool.scope === poolScope);
+  }, [poolStatsData, poolScope]);
+
+  // Calculate stats - token amounts (use poolDecimals directly to avoid stale context)
+  const acceptedFundsToken = useMemo(() => {
+    if (currentPoolStats?.acceptedDepositsValue) {
+      return Number(formatUnits(BigInt(currentPoolStats.acceptedDepositsValue), poolDecimals));
+    }
     if (!poolData?.totalInPoolValue) return 0;
-    const totalFunds = formatUnits(BigInt(poolData.totalInPoolValue), assetDecimals || decimals);
-    return Number(totalFunds) * 2500; // Convert to USD
-  }, [poolData, assetDecimals, decimals]);
+    return Number(formatUnits(BigInt(poolData.totalInPoolValue), poolDecimals));
+  }, [currentPoolStats, poolData, poolDecimals]);
 
-  const pendingFunds = useMemo(() => {
-    if (!poolData?.totalDepositsValue || !poolData?.totalInPoolValue) return 0;
-    const pending = BigInt(poolData.totalDepositsValue) - BigInt(poolData.totalInPoolValue);
-    const pendingFormatted = formatUnits(pending, assetDecimals || decimals);
-    return Number(pendingFormatted) * 2500; // Convert to USD
-  }, [poolData, assetDecimals, decimals]);
-
-  const myFunds = useMemo(() => {
-    if (!isLogged) return 0;
-    const amount = formatUnits(amountPoolAsset, assetDecimals || decimals);
-    return Number(amount) * 2500; // Convert to USD
-  }, [isLogged, amountPoolAsset, assetDecimals, decimals]);
+  const pendingFundsToken = useMemo(() => {
+    if (!currentPoolStats?.pendingDepositsValue) return 0;
+    return Number(formatUnits(BigInt(currentPoolStats.pendingDepositsValue), poolDecimals));
+  }, [currentPoolStats, poolDecimals]);
 
   const myFundsToken = useMemo(() => {
-    if (!isLogged) return '0';
-    return formatUnits(amountPoolAsset, assetDecimals || decimals);
-  }, [isLogged, amountPoolAsset, assetDecimals, decimals]);
+    if (!isLogged) return 0;
+    return Number(formatUnits(amountPoolAsset, poolDecimals));
+  }, [isLogged, amountPoolAsset, poolDecimals]);
+
+  const myFundsUsd = useMemo(() => {
+    return myFundsToken * (price || 0);
+  }, [myFundsToken, price]);
+
+  const acceptedFundsUsd = useMemo(() => {
+    return acceptedFundsToken * (price || 0);
+  }, [acceptedFundsToken, price]);
+
+  const pendingFundsUsd = useMemo(() => {
+    return pendingFundsToken * (price || 0);
+  }, [pendingFundsToken, price]);
+
+  const totalDepositsCount = useMemo(() => {
+    return currentPoolStats?.totalDepositsCount || 0;
+  }, [currentPoolStats]);
 
   const myPoolAccountsCount = useMemo(() => {
     if (!isLogged || !poolScope) return 0;
@@ -153,6 +213,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
         timestamp: Number(pa.deposit.timestamp),
         label: pa.label,
         scope: pa.scope,
+        chainId: pa.chainId,
       });
 
       for (const [idx, child] of pa.children.entries()) {
@@ -164,11 +225,12 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
           timestamp: Number(child.timestamp),
           label: child.label,
           scope: pa.scope,
+          chainId: pa.chainId,
         });
       }
     }
 
-    for (const { ragequit, scope } of accountsForThisPool) {
+    for (const { ragequit, scope, chainId } of accountsForThisPool) {
       if (!ragequit?.transactionHash) continue;
       history.push({
         type: EventType.EXIT,
@@ -178,6 +240,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
         timestamp: Number(ragequit?.timestamp),
         label: ragequit?.label,
         scope: scope,
+        chainId: chainId,
       });
     }
 
@@ -225,7 +288,10 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
 
   // Update activity view to 'personal' when address becomes available
 
-  const activityData = activityView === 'global' ? previewGlobalEvents : localPreviewPersonalActivity;
+  // Pool events are already in the correct format from the API
+  const poolActivityEvents = poolEventsData?.events || [];
+
+  const activityData = activityView === 'global' ? poolActivityEvents : localPreviewPersonalActivity;
 
   return (
     <PoolPageContainer>
@@ -262,7 +328,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
             >
               {localPreviewPoolAccounts.length > 0 && (
                 <ViewAllButton onClick={handleShowEmptyPools} disabled={!poolsByAssetAndChain?.length}>
-                  <ViewAllText>{hideEmptyPools ? 'Show' : 'Hide'} empty pools</ViewAllText>
+                  <ViewAllText>{hideEmptyPools ? 'Show' : 'Hide'} empty accounts</ViewAllText>
                 </ViewAllButton>
               )}
 
@@ -281,37 +347,36 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
         {/* Stats Section */}
         <StatsContainer>
           <Grid container>
-            <StatsColumn item xs={12} sm={3}>
+            <StatsColumn item xs={12} sm={2.4}>
               <StatLabel>Accepted Funds</StatLabel>
               <StatValue>
-                ${acceptedFunds.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatCompactNumber(acceptedFundsToken)} {currentPoolInfo?.asset}
               </StatValue>
-              <StatChange>
-                <TrendIcon>↗</TrendIcon> 8.5% past 24h
-              </StatChange>
+              <StatSubtext>${formatCompactNumber(acceptedFundsUsd)}</StatSubtext>
             </StatsColumn>
 
-            <StatsColumn item xs={12} sm={3}>
+            <StatsColumn item xs={12} sm={2.4}>
               <StatLabel>Pending Funds</StatLabel>
               <StatValue>
-                ${pendingFunds.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatCompactNumber(pendingFundsToken)} {currentPoolInfo?.asset}
               </StatValue>
-              <StatChange>
-                <TrendIcon>↗</TrendIcon> 8.5% past 24h
-              </StatChange>
+              <StatSubtext>${formatCompactNumber(pendingFundsUsd)}</StatSubtext>
             </StatsColumn>
 
-            <StatsColumn item xs={12} sm={3}>
+            <StatsColumn item xs={12} sm={2.4}>
+              <StatLabel>Total Deposits</StatLabel>
+              <StatValue>{formatCompactNumber(totalDepositsCount)}</StatValue>
+            </StatsColumn>
+
+            <StatsColumn item xs={12} sm={2.4}>
               <StatLabel>My Funds</StatLabel>
               <StatValue>
-                ${myFunds.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatCompactNumber(myFundsToken)} {currentPoolInfo?.asset}
               </StatValue>
-              <StatSubtext>
-                {myFundsToken} {symbol}
-              </StatSubtext>
+              <StatSubtext>${formatCompactNumber(myFundsUsd)}</StatSubtext>
             </StatsColumn>
 
-            <StatsColumn item xs={12} sm={3} isLast>
+            <StatsColumn item xs={12} sm={2.4} isLast>
               <StatLabel>My Pool Accounts</StatLabel>
               <StatValue>{myPoolAccountsCount}</StatValue>
             </StatsColumn>
@@ -417,156 +482,173 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
                 >
                   Personal
                 </ActivityButton>
+
+                <ActivityDivider />
+
+                <ActivityButton
+                  variant='text'
+                  onClick={() => setActivityView('stats')}
+                  active={String(activityView === 'stats')}
+                >
+                  Stats
+                </ActivityButton>
               </Stack>
 
-              <ViewAllButton onClick={handleNavigateToActivity} disabled={!activityData?.length}>
-                <ViewAllText>View All</ViewAllText>
-              </ViewAllButton>
+              {activityView !== 'stats' && (
+                <ViewAllButton onClick={handleNavigateToActivity} disabled={!activityData?.length}>
+                  <ViewAllText>View All</ViewAllText>
+                </ViewAllButton>
+              )}
             </Stack>
           </Box>
         </ActivitySection>
 
-        <ActivityTable records={activityData} isLoading={activityLoading} view={activityView} size='small' />
+        {activityView === 'stats' ? (
+          <ActivityStatsContainer>
+            <StatsColumnsContainer>
+              {/* All Time Column */}
+              <ActivityStatsColumn>
+                <StatsColumnHeader>All Time</StatsColumnHeader>
+                <ActivityStatsGrid>
+                  <ActivityStatItem>
+                    <ActivityStatLabel>Current TVL</ActivityStatLabel>
+                    <ActivityStatValue>
+                      $
+                      {parseFloat(poolStatisticsData?.pool?.allTime?.tvlUsd || '0').toLocaleString('en-US', {
+                        maximumFractionDigits: 0,
+                      })}
+                    </ActivityStatValue>
+                  </ActivityStatItem>
+                  <ActivityStatItem>
+                    <ActivityStatLabel>Avg Deposit Size</ActivityStatLabel>
+                    <ActivityStatValue>
+                      $
+                      {parseFloat(poolStatisticsData?.pool?.allTime?.avgDepositSizeUsd || '0').toLocaleString('en-US', {
+                        maximumFractionDigits: 0,
+                      })}
+                    </ActivityStatValue>
+                  </ActivityStatItem>
+                  <ActivityStatItem>
+                    <ActivityStatLabel>Total Deposits</ActivityStatLabel>
+                    <ActivityStatValue>
+                      {(poolStatisticsData?.pool?.allTime?.totalDepositsCount || 0).toLocaleString('en-US')}
+                    </ActivityStatValue>
+                  </ActivityStatItem>
+                  <ActivityStatItem>
+                    <ActivityStatLabel>Total Withdrawals</ActivityStatLabel>
+                    <ActivityStatValue>
+                      {(poolStatisticsData?.pool?.allTime?.totalWithdrawalsCount || 0).toLocaleString('en-US')}
+                    </ActivityStatValue>
+                  </ActivityStatItem>
+                </ActivityStatsGrid>
+              </ActivityStatsColumn>
+
+              {/* Last 24h Column */}
+              <ActivityStatsColumn>
+                <StatsColumnHeader>Last 24h</StatsColumnHeader>
+                <ActivityStatsGrid>
+                  <ActivityStatItem>
+                    <ActivityStatLabel>TVL Change</ActivityStatLabel>
+                    <ActivityStatValue>
+                      $
+                      {parseFloat(poolStatisticsData?.pool?.last24h?.tvlUsd || '0').toLocaleString('en-US', {
+                        maximumFractionDigits: 0,
+                      })}
+                    </ActivityStatValue>
+                  </ActivityStatItem>
+                  <ActivityStatItem>
+                    <ActivityStatLabel>Avg Deposit Size</ActivityStatLabel>
+                    <ActivityStatValue>
+                      $
+                      {parseFloat(poolStatisticsData?.pool?.last24h?.avgDepositSizeUsd || '0').toLocaleString('en-US', {
+                        maximumFractionDigits: 0,
+                      })}
+                    </ActivityStatValue>
+                  </ActivityStatItem>
+                  <ActivityStatItem>
+                    <ActivityStatLabel>Total Deposits</ActivityStatLabel>
+                    <ActivityStatValue>
+                      {(poolStatisticsData?.pool?.last24h?.totalDepositsCount || 0).toLocaleString('en-US')}
+                    </ActivityStatValue>
+                  </ActivityStatItem>
+                  <ActivityStatItem>
+                    <ActivityStatLabel>Total Withdrawals</ActivityStatLabel>
+                    <ActivityStatValue>
+                      {(poolStatisticsData?.pool?.last24h?.totalWithdrawalsCount || 0).toLocaleString('en-US')}
+                    </ActivityStatValue>
+                  </ActivityStatItem>
+                </ActivityStatsGrid>
+              </ActivityStatsColumn>
+            </StatsColumnsContainer>
+          </ActivityStatsContainer>
+        ) : (
+          <ActivityTable records={activityData} isLoading={poolEventsLoading} view={activityView} size='small' />
+        )}
       </ActivityContainer>
     </PoolPageContainer>
   );
 };
 
-// Custom Pool Asset Select Component
+// Custom Pool Asset Select Component with two-level selection (Chain -> Token)
 const PoolAssetSelect = ({ chainId, poolId }: { chainId: number; poolId: string }) => {
   const router = useRouter();
-  const { chain, setSelectedAsset } = useChainContext();
+  const { setSelectedAsset } = useChainContext();
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Get all available pools for this chain
-  const availableOptions: PoolOption[] = chain?.poolInfo
-    ? chain.poolInfo.map((pool) => ({
-        value: pool.asset as ChainAssets,
-        label: pool.asset,
-        chainName: chainData[chainId]?.name || 'Unknown',
-        icon: pool.icon,
-      }))
-    : [];
+  // Get current selection info
+  const currentChain = chainData[chainId];
+  const currentPool = currentChain?.poolInfo.find((p) => p.asset.toLowerCase() === poolId.toLowerCase());
 
-  const selectedOption = availableOptions.find((opt) => opt.value.toLowerCase() === poolId.toLowerCase());
-
-  const handleChange = (_event: React.SyntheticEvent, newValue: PoolOption | null) => {
-    if (newValue) {
-      setSelectedAsset(newValue.value);
-      router.push(`/pools/${chainId}/${newValue.value.toLowerCase()}`);
+  const handleToggle = () => {
+    if (anchorEl) {
+      setAnchorEl(null);
+    } else {
+      setAnchorEl(buttonRef.current);
     }
   };
 
-  return (
-    <PoolSelectAutocompleteStyled
-      value={selectedOption || undefined}
-      onChange={handleChange}
-      options={availableOptions}
-      getOptionLabel={(option) => option.label}
-      componentsProps={{
-        popper: {
-          style: { width: 'fit-content' },
-        },
-        paper: {
-          sx: {
-            border: '1px solid #000000',
-            boxShadow: 'none',
-            '& .MuiAutocomplete-listbox': {
-              padding: 0,
-              '&::-webkit-scrollbar': {
-                width: '4px',
-              },
-              '&::-webkit-scrollbar-track': {
-                background: 'transparent',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: '#E6E6E6',
-                borderRadius: '4px',
-              },
-              '&::-webkit-scrollbar-thumb:hover': {
-                background: '#D0D0D0',
-              },
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#E6E6E6 transparent',
-            },
-            '& .MuiAutocomplete-option': {
-              padding: '12px 0px',
-              height: '45px',
-              borderBottom: '1px solid #E6E6E6',
-              '&:last-child': {
-                borderBottom: 'none',
-              },
-            },
-          },
-        },
-      }}
-      renderOption={(props, option) => (
-        <li {...props} key={option.value}>
-          <PoolOptionContent>
-            {option.icon && (
-              <PoolIconWrapper>
-                <Image src={option.icon} alt={option.label} width={24} height={24} />
-              </PoolIconWrapper>
-            )}
-            <span>
-              {option.label}@<ChainNameText>{option.chainName}</ChainNameText>
-            </span>
-          </PoolOptionContent>
-        </li>
-      )}
-      renderInput={(params) => {
-        const icon = selectedOption?.icon;
-        const { InputProps, inputProps, ...restParams } = params;
-        const { endAdornment, ...restInputProps } = InputProps;
+  const handleSelect = (newChainId: number, asset: string) => {
+    setSelectedAsset(asset as ChainAssets);
+    router.push(`/pools/${newChainId}/${asset.toLowerCase()}`);
+  };
 
-        return (
-          <TextField
-            {...restParams}
-            size='small'
-            variant='outlined'
-            InputProps={{
-              ...restInputProps,
-              startAdornment: (
-                <>
-                  {icon && (
-                    <PoolIconWrapper sx={{ mr: '0.8rem' }}>
-                      <Image src={icon} alt={selectedOption?.label || ''} width={24} height={24} />
-                    </PoolIconWrapper>
-                  )}
-                  {selectedOption && (
-                    <Box
-                      component='span'
-                      sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, fontSize: '16px' }}
-                    >
-                      <span>{selectedOption.label}</span>
-                      <ChainNameText>@{selectedOption.chainName}</ChainNameText>
-                    </Box>
-                  )}
-                </>
-              ),
-              endAdornment: (
-                <>
-                  <Typography
-                    variant='subtitle1'
-                    fontWeight='bold'
-                    lineHeight='1'
-                    sx={{ ml: '4px', mr: '4px', whiteSpace: 'nowrap' }}
-                  >
-                    Pool
-                  </Typography>
-                  {endAdornment}
-                </>
-              ),
-            }}
-            inputProps={{
-              ...inputProps,
-              value: '',
-              style: { width: 0, padding: 0, margin: 0, minWidth: 0, flex: 'none' }, // Hide the default input since we're using startAdornment
-            }}
-          />
-        );
-      }}
-      disableClearable
-    />
+  return (
+    <PoolSelectorContainer>
+      <PoolSelectorButton ref={buttonRef} onClick={handleToggle}>
+        {currentPool?.icon && (
+          <PoolIconWrapper>
+            <Image src={currentPool.icon} alt={currentPool.asset} width={24} height={24} />
+          </PoolIconWrapper>
+        )}
+        <span style={{ fontWeight: 600, fontSize: '16px' }}>
+          {currentPool?.asset}
+          <ChainNameText>@{currentChain?.name}</ChainNameText>
+        </span>
+        <Typography variant='subtitle1' fontWeight='bold' lineHeight='1' sx={{ ml: '4px', whiteSpace: 'nowrap' }}>
+          Pool
+        </Typography>
+        <DropdownArrow open={!!anchorEl}>
+          <svg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'>
+            <path
+              d='M1 1.5L6 6.5L11 1.5'
+              stroke='black'
+              strokeWidth='1.5'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+            />
+          </svg>
+        </DropdownArrow>
+      </PoolSelectorButton>
+
+      <ChainTokenSelectorDropdown
+        selectedChainId={chainId}
+        selectedAsset={currentPool?.asset || ''}
+        onSelect={handleSelect}
+        onClose={() => setAnchorEl(null)}
+        anchorEl={anchorEl}
+      />
+    </PoolSelectorContainer>
   );
 };
 
@@ -587,85 +669,33 @@ const BackButton = styled(IconButton)(() => ({
   },
 }));
 
-const PoolSelectAutocomplete = styled(Autocomplete<PoolOption, false, true, false>)(({ theme }) => ({
-  width: 'fit-content',
-  maxWidth: 'fit-content',
-  marginLeft: '-4px',
-  '& .MuiOutlinedInput-root': {
-    fontWeight: 600,
-    fontSize: '16px',
-    paddingLeft: '12px',
-    paddingRight: '8px',
-    paddingTop: '4px',
-    paddingBottom: '4px',
-    width: 'fit-content',
-    maxWidth: 'fit-content',
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    '& .MuiOutlinedInput-notchedOutline': {
-      border: 'none',
-    },
-    '&:hover .MuiOutlinedInput-notchedOutline': {
-      border: 'none',
-    },
-    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      border: 'none',
-    },
-  },
-  '& .MuiAutocomplete-input': {
-    cursor: 'pointer',
-    padding: '0 !important',
-    minWidth: '0 !important',
-    width: '0 !important',
-    flex: '0 0 auto',
-    position: 'absolute',
-    opacity: 0,
-    pointerEvents: 'none',
-  },
-  '& .MuiInputBase-input': {
-    overflow: 'visible !important',
-    textOverflow: 'clip !important',
-    whiteSpace: 'nowrap !important',
-  },
-  '& .MuiAutocomplete-endAdornment': {
-    position: 'relative !important',
-    top: 'auto !important',
-    right: 'auto !important',
-    transform: 'none !important',
-    display: 'flex',
-    alignItems: 'center',
-    marginLeft: '0px',
-  },
-  '& .MuiAutocomplete-popupIndicator': {
-    border: 'none',
-    padding: '4px',
-    marginRight: '0',
-  },
-  [theme.breakpoints.down('sm')]: {
-    maxWidth: '250px',
-  },
+// Pool selector styled components
+const PoolSelectorContainer = styled('div')(() => ({
+  position: 'relative',
+  display: 'inline-block',
 }));
 
-// Override the popper width globally for this autocomplete
-const PoolSelectAutocompleteStyled = styled(PoolSelectAutocomplete)(() => ({
-  '& + .MuiAutocomplete-popper': {
-    width: 'fit-content !important',
-    minWidth: '200px',
-    '& .MuiPaper-root': {
-      width: 'fit-content !important',
-    },
-    '& .MuiAutocomplete-listbox': {
-      width: 'fit-content !important',
-    },
-  },
-}));
-
-const PoolOptionContent = styled('div')(() => ({
+const PoolSelectorButton = styled('button')(() => ({
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
-  width: '100%',
+  padding: '8px 12px',
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  '&:hover': {
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+  },
+}));
+
+const DropdownArrow = styled('span', {
+  shouldForwardProp: (prop) => prop !== 'open',
+})<{ open: boolean }>(({ open }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  marginLeft: '4px',
+  transition: 'transform 0.2s',
+  transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
 }));
 
 const PoolIconWrapper = styled('div')(() => ({
@@ -679,9 +709,7 @@ const PoolIconWrapper = styled('div')(() => ({
 
 const ChainNameText = styled('span')(({ theme }) => ({
   color: theme.palette.grey[400],
-  fontWeight: 600,
-  //textDecoration: 'underline',
-  //textUnderlineOffset: '0.3rem',
+  fontWeight: 400,
   lineHeight: '1.25',
 }));
 
@@ -737,25 +765,11 @@ const StatValue = styled(Typography)(({ theme }) => ({
   },
 }));
 
-const StatChange = styled(Typography)(() => ({
-  fontWeight: 400,
-  fontSize: '12px',
-  lineHeight: '100%',
-  color: '#7D9C40',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-}));
-
 const StatSubtext = styled(Typography)(() => ({
   fontWeight: 400,
   fontSize: '12px',
   lineHeight: '100%',
   color: '#4D4D4D',
-}));
-
-const TrendIcon = styled('span')(() => ({
-  fontSize: '14px',
 }));
 
 const ConnectContainer = styled(Box)(({ theme }) => ({
@@ -816,6 +830,67 @@ const ActivityButton = styled(Button)<{ active: string }>(({ theme, active }) =>
   '&.MuiButtonBase-root.MuiButton-root:hover': {
     background: theme.palette.grey[50],
   },
+}));
+
+const ActivityStatsContainer = styled(Box)(({ theme }) => ({
+  borderTop: `1px solid ${theme.palette.grey[600]}`,
+  padding: '24px 16px',
+}));
+
+const StatsColumnsContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'row',
+  gap: '32px',
+  [theme.breakpoints.down('md')]: {
+    flexDirection: 'column',
+    gap: '24px',
+  },
+}));
+
+const ActivityStatsColumn = styled(Box)(() => ({
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px',
+}));
+
+const StatsColumnHeader = styled(Typography)(() => ({
+  fontWeight: 700,
+  fontSize: '14px',
+  lineHeight: '100%',
+  color: '#000000',
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+  marginBottom: '8px',
+}));
+
+const ActivityStatsGrid = styled(Box)(({ theme }) => ({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, 1fr)',
+  gap: '24px',
+  [theme.breakpoints.down('sm')]: {
+    gridTemplateColumns: '1fr',
+  },
+}));
+
+const ActivityStatItem = styled(Box)(() => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '8px',
+}));
+
+const ActivityStatLabel = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#4D4D4D',
+}));
+
+const ActivityStatValue = styled(Typography)(() => ({
+  fontWeight: 700,
+  fontSize: '24px',
+  lineHeight: '31px',
+  color: '#000000',
 }));
 
 const STypography = styled(Typography)(({ theme }) => ({

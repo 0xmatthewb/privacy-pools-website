@@ -55,7 +55,7 @@ export const ValueSection = () => {
           <Text variant='body2'>
             The ASP will validate that the funds are coming from a good actor (not a flagged account).
           </Text>
-          <Strong>Estimated period: Up to 7 days.</Strong>
+          <Strong>Estimated period: 1 hour*</Strong>
         </>
       )}
     </Container>

@@ -81,20 +81,25 @@ export const ChainProvider = ({ children }: Props) => {
 
   const chain = useMemo(() => chainData[chainId] || chainData[whitelistedChains[0].id], [chainId]);
 
-  // Find the pool info based on the selected asset
+  // Find the pool info based on the selected asset (case-insensitive)
   const selectedPoolInfo = useMemo(() => {
     if (!chain?.poolInfo || chain.poolInfo.length === 0) {
       return {} as PoolInfo;
     }
-    return chain.poolInfo.find((pool) => pool.asset === selectedAsset) ?? chain.poolInfo[0];
+    return chain.poolInfo.find((pool) => pool.asset.toLowerCase() === selectedAsset.toLowerCase()) ?? chain.poolInfo[0];
   }, [chain, selectedAsset]);
 
+  console.log(
+    `fetching data for chainId: ${chainId}, selectedAsset: ${selectedAsset}, token: ${selectedAsset === DEFAULT_ASSET ? undefined : selectedPoolInfo.assetAddress}`,
+  );
   // User balance based on the selected asset
   const { data: userBalance } = useBalance({
     address,
     chainId,
-    token: selectedAsset === DEFAULT_ASSET ? undefined : selectedPoolInfo.assetAddress,
+    token: selectedPoolInfo.isNativeToken ? undefined : selectedPoolInfo.assetAddress, //selectedAsset === DEFAULT_ASSET ? undefined : selectedPoolInfo.assetAddress,
   });
+
+  console.log(`User balance for asset ${selectedAsset} on chain ${chainId}:`, userBalance);
 
   const balanceBN = useMemo(() => {
     if (userBalance) {

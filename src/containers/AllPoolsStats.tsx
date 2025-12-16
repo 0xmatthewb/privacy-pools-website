@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import SearchIcon from '@mui/icons-material/Search';
@@ -17,17 +17,21 @@ import {
   Typography,
 } from '@mui/material';
 import { useQueries } from '@tanstack/react-query';
+import { formatUnits } from 'viem';
 import { InfoTooltip } from '~/components/InfoTooltip';
-import { chainData, getConfig, PoolInfo } from '~/config';
+import { allPoolsChainData, getConfig, PoolInfo } from '~/config';
 import { PAContainer, Section } from '~/containers';
 import type { PoolResponse } from '~/types';
 import { aspClient } from '~/utils';
+import type { PoolStats } from '~/utils/aspClient';
 
 export interface PoolCardData {
   poolName: string;
   icon?: string;
   asset: string;
   chainId: number;
+  chainName: string; // Name of the chain (e.g., "Ethereum", "Sepolia")
+  chainIcon?: string; // Icon for the chain
   scope: string;
   totalFunds: bigint;
   fundsPending: bigint;
@@ -36,6 +40,7 @@ export interface PoolCardData {
   decimals: number;
   acceptedDepositsCount: number;
   depositVarianceScore: number; // 0-1, where 1 is best (low variance)
+  originalKey?: string; // Optional: the original key from poolAccountsByChainScope for lookups
 }
 
 export interface PrivacyScoreBar {
@@ -199,15 +204,13 @@ const PoolCard = ({
   const hasGrowth = pool.growthPercentage !== undefined && pool.growthPercentage !== 0;
   const isPositiveGrowth = (pool.growthPercentage || 0) > 0;
 
-  // Calculate privacy score bar based on total funds, deposit count, and deposit uniformity
-  const privacyScoreBar = calculatePrivacyScore(totalFundsUSD, pool.acceptedDepositsCount, pool.depositVarianceScore);
-
-  // Calculate numeric privacy score value
-  const privacyScoreValue = calculatePrivacyScoreValue(
-    totalFundsUSD,
-    pool.acceptedDepositsCount,
-    pool.depositVarianceScore,
-  );
+  // HIDDEN: Privacy score calculations (commented out to hide privacy score)
+  // const privacyScoreBar = calculatePrivacyScore(totalFundsUSD, pool.acceptedDepositsCount, pool.depositVarianceScore);
+  // const privacyScoreValue = calculatePrivacyScoreValue(
+  //   totalFundsUSD,
+  //   pool.acceptedDepositsCount,
+  //   pool.depositVarianceScore,
+  // );
 
   const handleClick = () => {
     router.push(`/pools/${pool.chainId}/${pool.asset.toLowerCase()}`);
@@ -217,12 +220,18 @@ const PoolCard = ({
     <PoolCardContainer isLeftColumn={isLeftColumn} isFirstRow={isFirstRow} onClick={handleClick}>
       <PoolHeader>
         <Stack direction='row' alignItems='center' gap={1}>
-          {pool.icon && (
-            <IconWrapper>
-              <Image src={pool.icon} alt={pool.asset} width={24} height={24} />
-            </IconWrapper>
-          )}
-          <PoolName variant='body1'>{pool.asset} Pool</PoolName>
+          <IconWrapper>
+            {pool.icon && <Image src={pool.icon} alt={pool.asset} width={24} height={24} />}
+            {pool.chainIcon && (
+              <ChainIconOverlay>
+                <Image src={pool.chainIcon} alt={pool.chainName} width={14} height={14} />
+              </ChainIconOverlay>
+            )}
+          </IconWrapper>
+          <Stack direction='row' alignItems='center' gap={1}>
+            <PoolName variant='body1'>{pool.asset} Pool</PoolName>
+            <ChainName variant='body1'>{pool.chainName}</ChainName>
+          </Stack>
         </Stack>
         {hasGrowth && (
           <GrowthIndicator positive={isPositiveGrowth}>
@@ -251,12 +260,13 @@ const PoolCard = ({
 
       <PoolStats>
         <StatLabel>Total funds</StatLabel>
-        <Stack direction='row' alignItems='center' gap='4px'>
+        {/* HIDDEN: Privacy score label and tooltip */}
+        {/* <Stack direction='row' alignItems='center' gap='4px'>
           <StatLabel>Privacy score</StatLabel>
           <InfoTooltip
             message={`Privacy score: ${(privacyScoreValue * 100).toFixed(1)}% - Based on pool size (${(pool.acceptedDepositsCount || 0).toLocaleString()} deposits), total funds, and deposit uniformity (${Math.round(pool.depositVarianceScore * 100)}%)`}
           />
-        </Stack>
+        </Stack> */}
       </PoolStats>
 
       <PoolStatsBottom>
@@ -264,23 +274,113 @@ const PoolCard = ({
           <TotalFundsValue>{totalFundsDisplay}</TotalFundsValue>
           <InfoTooltip message='Total funds in the pool' iconWidth={14} iconHeight={14} />
         </Stack>
-        <PrivacyScoreBar>
-          {/* Left side (red zone): 62px total, gray background with red fill from right */}
+        {/* HIDDEN: Privacy score bar */}
+        {/* <PrivacyScoreBar>
           <PrivacyScoreSide width={62}>
             {privacyScoreBar.redFillWidth > 0 && (
               <PrivacyScoreFill width={privacyScoreBar.redFillWidth} color='#BA6B5D' align='right' />
             )}
           </PrivacyScoreSide>
           <PrivacyScoreVerticalLine />
-          {/* Right side (green zone): 62px total, gray background with green fill from left */}
           <PrivacyScoreSide width={62}>
             {privacyScoreBar.greenFillWidth > 0 && (
               <PrivacyScoreFill width={privacyScoreBar.greenFillWidth} color='#7D9C40' align='left' />
             )}
           </PrivacyScoreSide>
-        </PrivacyScoreBar>
+        </PrivacyScoreBar> */}
       </PoolStatsBottom>
     </PoolCardContainer>
+  );
+};
+
+const FundsOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTop?: boolean }) => {
+  const router = useRouter();
+
+  const totalFundsUSD = pool.totalFundsUSD ?? 0;
+  const totalFundsDisplay = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(totalFundsUSD);
+
+  const handleClick = () => {
+    router.push(`/pools/${pool.chainId}/${pool.asset.toLowerCase()}`);
+  };
+
+  return (
+    <SinglePoolCardContainer onClick={handleClick} hasBorderTop={hasBorderTop}>
+      <PoolHeader>
+        <Stack direction='row' alignItems='center' gap={1}>
+          <IconWrapper>
+            {pool.icon && <Image src={pool.icon} alt={pool.asset} width={24} height={24} />}
+            {pool.chainIcon && (
+              <ChainIconOverlay>
+                <Image src={pool.chainIcon} alt={pool.chainName} width={14} height={14} />
+              </ChainIconOverlay>
+            )}
+          </IconWrapper>
+          <Stack direction='row' alignItems='center' gap={1}>
+            <PoolName variant='body1'>{pool.asset} Pool</PoolName>
+            <ChainName variant='body1'>{pool.chainName}</ChainName>
+          </Stack>
+        </Stack>
+      </PoolHeader>
+
+      <PoolStats>
+        <StatLabel>Total funds</StatLabel>
+      </PoolStats>
+
+      <PoolStatsBottom>
+        <Stack direction='row' alignItems='center' gap='4px'>
+          <TotalFundsValue>{totalFundsDisplay}</TotalFundsValue>
+          <InfoTooltip message='Total funds in the pool' iconWidth={14} iconHeight={14} />
+        </Stack>
+      </PoolStatsBottom>
+    </SinglePoolCardContainer>
+  );
+};
+
+const GrowthOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTop?: boolean }) => {
+  const router = useRouter();
+
+  const hasGrowth = pool.growthPercentage !== undefined && pool.growthPercentage !== 0;
+  const isPositiveGrowth = (pool.growthPercentage || 0) > 0;
+
+  const handleClick = () => {
+    router.push(`/pools/${pool.chainId}/${pool.asset.toLowerCase()}`);
+  };
+
+  return (
+    <GrowthOnlyCardContainer onClick={handleClick} hasBorderTop={hasBorderTop}>
+      {hasGrowth ? (
+        <GrowthIndicator positive={isPositiveGrowth}>
+          {isPositiveGrowth ? (
+            <svg width='16' height='17' viewBox='0 0 16 17' fill='none' xmlns='http://www.w3.org/2000/svg'>
+              <path
+                d='M10 4.25V5.25H13.2929L9 9.54295L6.8535 7.3965C6.80709 7.35005 6.75199 7.3132 6.69133 7.28806C6.63067 7.26292 6.56566 7.24998 6.5 7.24998C6.43434 7.24998 6.36933 7.26292 6.30867 7.28806C6.24801 7.3132 6.19291 7.35005 6.1465 7.3965L1 12.5429L1.70705 13.25L6.5 8.45705L8.6465 10.6035C8.69291 10.6499 8.74801 10.6868 8.80867 10.7119C8.86932 10.7371 8.93434 10.75 9 10.75C9.06566 10.75 9.13068 10.7371 9.19133 10.7119C9.25199 10.6868 9.30709 10.6499 9.3535 10.6035L14 5.95705V9.25H15V4.25H10Z'
+                fill='#7D9C40'
+              />
+            </svg>
+          ) : (
+            <svg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'>
+              <path
+                d='M10 12V11H13.2929L9 6.70705L6.8535 8.8535C6.80709 8.89995 6.75199 8.9368 6.69133 8.96194C6.63067 8.98708 6.56566 9.00002 6.5 9.00002C6.43434 9.00002 6.36933 8.98708 6.30867 8.96194C6.24801 8.9368 6.19291 8.89995 6.1465 8.8535L1 3.70705L1.70705 3L6.5 7.79295L8.6465 5.6465C8.69291 5.60005 8.74801 5.5632 8.80867 5.53806C8.86932 5.51292 8.93434 5.49998 9 5.49998C9.06566 5.49998 9.13068 5.51292 9.19133 5.53806C9.25199 5.5632 9.30709 5.60005 9.3535 5.6465L14 10.293L14 7H15L15 12H10Z'
+                fill='#BA6B5D'
+              />
+            </svg>
+          )}
+          <GrowthPercentage positive={isPositiveGrowth}>
+            {Math.abs(pool.growthPercentage || 0).toFixed(1)}%
+          </GrowthPercentage>
+          <GrowthTimeframe>past 24h</GrowthTimeframe>
+        </GrowthIndicator>
+      ) : (
+        <Typography variant='body2' color='text.secondary'>
+          No change
+        </Typography>
+      )}
+    </GrowthOnlyCardContainer>
   );
 };
 
@@ -290,131 +390,106 @@ export const AllPoolsStats = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('most-popular');
   const [sortSelectOpen, setSortSelectOpen] = useState(false);
-  const aspUrl = getConfig().env.ASP_ENDPOINT;
 
-  // Build list of all pools to query
-  const allPoolsToQuery = useMemo(() => {
-    const pools: Array<{ chainId: number; scope: string; aspUrl: string; poolInfo: PoolInfo }> = [];
-    Object.entries(chainData).forEach(([cId, chain]) => {
-      chain.poolInfo.forEach((poolInfo: PoolInfo) => {
-        pools.push({
-          chainId: parseInt(cId),
-          scope: poolInfo.scope.toString(),
-          aspUrl,
-          poolInfo,
-        });
-      });
-    });
-    return pools;
-  }, [aspUrl]);
+  // Get ASP endpoints for test and non-test chains
+  const { ASP_ENDPOINT_TEST, ASP_ENDPOINT_NON_TEST } = getConfig().env;
 
-  // Get unique chain IDs for fetching pools-stats
-  const uniqueChainIds = useMemo(() => {
-    return Array.from(new Set(allPoolsToQuery.map((pool) => pool.chainId)));
-  }, [allPoolsToQuery]);
-
-  // Fetch pool info for each individual pool
-  const poolInfoQueries = useQueries({
-    queries: allPoolsToQuery.map((pool) => ({
-      queryKey: ['asp_pool_info', pool.chainId, pool.scope, pool.aspUrl],
-      queryFn: () => aspClient.fetchPoolInfo(pool.aspUrl, pool.chainId, pool.scope),
-      refetchInterval: 120000, // Increased to 2 minutes
-      staleTime: 60000, // Consider data fresh for 60 seconds
-      retryOnMount: false,
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    })),
+  // Fetch pools-stats from both ASP endpoints (test and non-test)
+  const poolStatsQuery = useQueries({
+    queries: [
+      {
+        queryKey: ['asp_pools_stats', 'test', ASP_ENDPOINT_TEST],
+        queryFn: () => aspClient.fetchPoolStats(ASP_ENDPOINT_TEST, 'all'),
+        refetchInterval: 120000, // 2 minutes
+        staleTime: 60000, // Consider data fresh for 60 seconds
+        retryOnMount: false,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+      },
+      {
+        queryKey: ['asp_pools_stats', 'non_test', ASP_ENDPOINT_NON_TEST],
+        queryFn: () => aspClient.fetchPoolStats(ASP_ENDPOINT_NON_TEST, 'all'),
+        refetchInterval: 120000, // 2 minutes
+        staleTime: 60000, // Consider data fresh for 60 seconds
+        retryOnMount: false,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+      },
+    ],
   });
 
-  // Fetch pools-stats for each chain to get growth24h data
-  const poolStatsQueries = useQueries({
-    queries: uniqueChainIds.map((chainId) => ({
-      queryKey: ['asp_pools_stats', chainId, aspUrl],
-      queryFn: () => aspClient.fetchPoolStats(aspUrl, chainId),
-      refetchInterval: 120000,
-      staleTime: 60000,
-      retryOnMount: false,
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    })),
-  });
+  // Build a map of pool stats by chainId and scope for easy lookup
+  const poolStatsMap = useMemo(() => {
+    const map = new Map<string, PoolStats>();
 
-  // Build a map of pool data by chainId and scope for easy lookup
-  const poolDataMap = useMemo(() => {
-    const map = new Map<string, PoolResponse>();
-
-    // First, build map of growth data by chainId and scope from poolStatsQueries
-    const growthDataMap = new Map<string, number | null>();
-    poolStatsQueries.forEach((query, index) => {
+    // Merge pools from both test and non-test queries
+    poolStatsQuery.forEach((query) => {
       if (!query.data?.pools) return;
-      const chainId = uniqueChainIds[index];
 
       query.data.pools.forEach((poolStats) => {
-        const key = `${chainId}-${poolStats.scope}`;
-        growthDataMap.set(key, poolStats.growth24h ?? null);
-      });
-    });
-
-    // Then, build the main pool data map with growth data merged in
-    poolInfoQueries.forEach((query, index) => {
-      if (!query.data) return;
-      const pool = allPoolsToQuery[index];
-      const key = `${pool.chainId}-${pool.scope}`;
-
-      // Merge growth24h data from poolStatsQueries
-      const growth24h = growthDataMap.get(key);
-      map.set(key, {
-        ...query.data,
-        growth24h,
+        const key = `${poolStats.chainId}-${poolStats.scope}`;
+        map.set(key, poolStats);
       });
     });
 
     return map;
-  }, [poolInfoQueries, poolStatsQueries, allPoolsToQuery, uniqueChainIds]);
+  }, [poolStatsQuery]);
 
-  // Build pool list dynamically from chainData with real stats
+  // Build pool list dynamically from allPoolsChainData with real stats
   const allPools = useMemo(() => {
     const pools: PoolCardData[] = [];
 
-    Object.entries(chainData).forEach(([cId, chain]) => {
+    Object.entries(allPoolsChainData).forEach(([cId, chain]) => {
       // Get all pools from this chain's poolInfo
       chain.poolInfo.forEach((poolInfo: PoolInfo) => {
         const dataKey = `${cId}-${poolInfo.scope}`;
-        const poolData = poolDataMap.get(dataKey);
+        const poolStats = poolStatsMap.get(dataKey);
 
-        const totalFunds = poolData?.totalInPoolValue ? BigInt(poolData.totalInPoolValue) : BigInt(0);
+        const totalFunds = poolStats?.totalInPoolValue ? BigInt(poolStats.totalInPoolValue) : BigInt(0);
         // Funds pending = total deposits - funds in pool
         const fundsPending =
-          poolData?.totalDepositsValue && poolData?.totalInPoolValue
-            ? BigInt(poolData.totalDepositsValue) - BigInt(poolData.totalInPoolValue)
+          poolStats?.totalDepositsValue && poolStats?.totalInPoolValue
+            ? BigInt(poolStats.totalDepositsValue) - BigInt(poolStats.totalInPoolValue)
             : BigInt(0);
 
         // Parse totalInPoolValueUsd from the API
-        const totalFundsUSD = poolData?.totalInPoolValueUsd
-          ? parseFloat(poolData.totalInPoolValueUsd.replace(/,/g, ''))
-          : undefined;
+        let totalFundsUSD: number | undefined;
+        if (poolStats?.totalInPoolValueUsd) {
+          const parsedUSD = parseFloat(poolStats.totalInPoolValueUsd.replace(/,/g, ''));
+          if (parsedUSD > 0) {
+            totalFundsUSD = parsedUSD;
+          } else if (poolStats?.totalInPoolValue && poolInfo.isStableAsset) {
+            // For stablecoins, if USD value is 0 but token value exists, use token value as USD (1:1)
+            totalFundsUSD = Number(formatUnits(BigInt(poolStats.totalInPoolValue), poolInfo.assetDecimals || 18));
+          }
+        } else if (poolStats?.totalInPoolValue && poolInfo.isStableAsset) {
+          // For stablecoins, if USD value is null/undefined but token value exists, use token value as USD (1:1)
+          totalFundsUSD = Number(formatUnits(BigInt(poolStats.totalInPoolValue), poolInfo.assetDecimals || 18));
+        }
 
         pools.push({
           poolName: `${chain.name} - ${poolInfo.asset} Pool`,
           icon: poolInfo.icon,
           asset: poolInfo.asset,
           chainId: parseInt(cId),
+          chainName: chain.name,
+          chainIcon: chain.image,
           scope: poolInfo.scope.toString(),
           totalFunds,
           fundsPending,
           totalFundsUSD,
           decimals: poolInfo.assetDecimals || 18,
-          growthPercentage: poolData?.growth24h ?? undefined,
-          acceptedDepositsCount: poolData?.acceptedDepositsCount || 0,
-          depositVarianceScore: calculateDepositVarianceScore(poolData),
+          growthPercentage: poolStats?.growth24h ?? undefined,
+          acceptedDepositsCount: poolStats?.acceptedDepositsCount || 0,
+          depositVarianceScore: 0.5, // Default since we don't have recentEvents from pools-stats
         });
       });
     });
 
     return pools;
-  }, [poolDataMap]);
+  }, [poolStatsMap]);
 
   // Filter and sort pools based on search query and sort option
   const filteredPools = useMemo(() => {
@@ -427,12 +502,44 @@ export const AllPoolsStats = () => {
         (pool) =>
           pool.poolName.toLowerCase().includes(query) ||
           pool.asset.toLowerCase().includes(query) ||
-          chainData[pool.chainId]?.name.toLowerCase().includes(query),
+          allPoolsChainData[pool.chainId]?.name.toLowerCase().includes(query),
       );
     }
 
     // Sort pools based on selected option
     const sortedPools = [...pools].sort((a, b) => {
+      // TEMPORARY: Priority pools for Frax announcement (chain-specific)
+      // Format: 'chainId-asset' (e.g., '1-ETH' for Ethereum mainnet ETH)
+      const PRIORITY_POOLS: Array<{ chainId: number; asset: string }> = []; /*[
+        { chainId: 1, asset: 'ETH' },     // Ethereum mainnet ETH
+        { chainId: 1, asset: 'FRXUSD' },  // Ethereum mainnet frxUSD
+        { chainId: 1, asset: 'USDC' },    // Ethereum mainnet USDC
+      ];*/
+
+      const aIsPriority = PRIORITY_POOLS.some(
+        (p) => p.chainId === a.chainId && p.asset.toUpperCase() === a.asset.toUpperCase(),
+      );
+      const bIsPriority = PRIORITY_POOLS.some(
+        (p) => p.chainId === b.chainId && p.asset.toUpperCase() === b.asset.toUpperCase(),
+      );
+
+      const aPriorityIndex = PRIORITY_POOLS.findIndex(
+        (p) => p.chainId === a.chainId && p.asset.toUpperCase() === a.asset.toUpperCase(),
+      );
+      const bPriorityIndex = PRIORITY_POOLS.findIndex(
+        (p) => p.chainId === b.chainId && p.asset.toUpperCase() === b.asset.toUpperCase(),
+      );
+
+      // Priority pools come first, sorted by their priority order
+      if (aIsPriority && bIsPriority) {
+        return aPriorityIndex - bPriorityIndex;
+      } else if (aIsPriority) {
+        return -1;
+      } else if (bIsPriority) {
+        return 1;
+      }
+
+      // Normal sorting logic (applies to non-priority pools)
       switch (sortBy) {
         case 'most-popular': {
           // Sort by total funds in USD (descending) - from API's totalInPoolValueUsd
@@ -494,7 +601,7 @@ export const AllPoolsStats = () => {
             </Typography>
           </Stack>
 
-          <Stack direction='row' alignItems='center' gap={2}>
+          <FilterRow>
             <SortSelect
               value={sortBy}
               onChange={handleSortChange}
@@ -561,17 +668,37 @@ export const AllPoolsStats = () => {
                 ),
               }}
             />
-          </Stack>
+          </FilterRow>
         </HeaderSection>
       </Section>
 
       <PoolsGridContainer>
         <PoolsGrid container spacing={0}>
-          {filteredPools.map((pool, index) => (
-            <Grid item xs={12} sm={6} key={`${pool.chainId}-${pool.scope}-${index}`}>
-              <PoolCard pool={pool} isLeftColumn={index % 2 === 0} isFirstRow={index < 2} />
-            </Grid>
-          ))}
+          {filteredPools.map((pool, index, arr) => {
+            const isOdd = arr.length % 2 === 1;
+            const isLast = index === arr.length - 1;
+
+            // If odd count and this is the last pool, show it with growth card beside it
+            if (isOdd && isLast) {
+              const needsBorderTop = arr.length > 2;
+              return (
+                <React.Fragment key={`${pool.chainId}-${pool.scope}-${index}`}>
+                  <Grid item xs={12} sm={6}>
+                    <FundsOnlyCard pool={pool} hasBorderTop={needsBorderTop} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <GrowthOnlyCard pool={pool} hasBorderTop={needsBorderTop} />
+                  </Grid>
+                </React.Fragment>
+              );
+            }
+
+            return (
+              <Grid item xs={12} sm={6} key={`${pool.chainId}-${pool.scope}-${index}`}>
+                <PoolCard pool={pool} isLeftColumn={index % 2 === 0} isFirstRow={index < 2} />
+              </Grid>
+            );
+          })}
         </PoolsGrid>
       </PoolsGridContainer>
 
@@ -596,6 +723,18 @@ const HeaderSection = styled(Stack)(({ theme }) => ({
     flexDirection: 'column',
     alignItems: 'flex-start',
     gap: theme.spacing(2),
+  },
+}));
+
+const FilterRow = styled(Stack)(({ theme }) => ({
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: theme.spacing(2),
+  [theme.breakpoints.down('sm')]: {
+    width: '100%',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: theme.spacing(1),
   },
 }));
 
@@ -629,6 +768,7 @@ const SearchField = styled(TextField)(({ theme }) => ({
     backgroundColor: theme.palette.background.paper,
   },
   [theme.breakpoints.down('sm')]: {
+    minWidth: 'unset',
     width: '100%',
   },
 }));
@@ -653,11 +793,7 @@ const PoolCardContainer = styled(Box, {
   alignItems: 'flex-start',
   padding: '20px',
   gap: '8px',
-  // Left column gets left border (outer edge) and right border (middle divider)
-  // Right column gets right border (outer edge)
-  //  borderLeft: isLeftColumn ? `1px solid ${theme.palette.grey[600]}` : 'none',
   borderRight: isLeftColumn ? `1px solid ${theme.palette.grey[600]}` : 'none',
-  // Add top border for rows after the first to separate them
   borderTop: !isFirstRow ? `1px solid ${theme.palette.grey[600]}` : 'none',
   backgroundColor: theme.palette.background.paper,
   minHeight: '131px',
@@ -674,6 +810,47 @@ const PoolCardContainer = styled(Box, {
   },
 }));
 
+const SinglePoolCardContainer = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'hasBorderTop',
+})<{ hasBorderTop?: boolean }>(({ theme, hasBorderTop }) => ({
+  boxSizing: 'border-box',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  padding: '20px',
+  gap: '8px',
+  backgroundColor: theme.palette.background.paper,
+  minHeight: '131px',
+  width: '100%',
+  cursor: 'pointer',
+  transition: 'background-color 0.2s ease',
+  borderTop: hasBorderTop ? `1px solid ${theme.palette.grey[600]}` : 'none',
+  '&:hover': {
+    backgroundColor: theme.palette.grey[50],
+  },
+}));
+
+const GrowthOnlyCardContainer = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'hasBorderTop',
+})<{ hasBorderTop?: boolean }>(({ theme, hasBorderTop }) => ({
+  boxSizing: 'border-box',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-end',
+  justifyContent: 'flex-start',
+  padding: '20px',
+  gap: '8px',
+  backgroundColor: theme.palette.background.paper,
+  minHeight: '131px',
+  width: '100%',
+  cursor: 'pointer',
+  transition: 'background-color 0.2s ease',
+  borderTop: hasBorderTop ? `1px solid ${theme.palette.grey[600]}` : 'none',
+  '&:hover': {
+    backgroundColor: theme.palette.grey[50],
+  },
+}));
+
 const PoolHeader = styled(Stack)(() => ({
   flexDirection: 'row',
   justifyContent: 'space-between',
@@ -683,16 +860,27 @@ const PoolHeader = styled(Stack)(() => ({
 }));
 
 const IconWrapper = styled('div')(() => ({
+  position: 'relative',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   width: '24px',
   height: '24px',
-  '& img': {
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain',
-  },
+}));
+
+const ChainIconOverlay = styled('div')(() => ({
+  position: 'absolute',
+  bottom: -4,
+  right: -4,
+  width: '18px',
+  height: '18px',
+  borderRadius: '50%',
+  backgroundColor: '#fff',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: '1px solid #fff',
+  overflow: 'hidden',
 }));
 
 const PoolName = styled(Typography)(({ theme }) => ({
@@ -700,6 +888,13 @@ const PoolName = styled(Typography)(({ theme }) => ({
   fontSize: '16px',
   lineHeight: '100%',
   color: theme.palette.text.primary,
+}));
+
+const ChainName = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '14px',
+  lineHeight: '100%',
+  color: '#999',
 }));
 
 const GrowthIndicator = styled(Stack, {
@@ -773,34 +968,35 @@ const PrivacyScoreBar = styled(Box)(() => ({
   display: 'flex',
 }));
 
-const PrivacyScoreSide = styled('div', {
-  shouldForwardProp: (prop) => prop !== 'width',
-})<{ width: number }>(({ theme, width }) => ({
-  position: 'relative',
-  width: `${width}px`,
-  height: '10px',
-  marginTop: '3px',
-  backgroundColor: theme.palette.grey[200],
-  overflow: 'hidden',
-}));
+// HIDDEN: Privacy score styled components (commented out)
+// const PrivacyScoreSide = styled('div', {
+//   shouldForwardProp: (prop) => prop !== 'width',
+// })<{ width: number }>(({ theme, width }) => ({
+//   position: 'relative',
+//   width: `${width}px`,
+//   height: '10px',
+//   marginTop: '3px',
+//   backgroundColor: theme.palette.grey[200],
+//   overflow: 'hidden',
+// }));
 
-const PrivacyScoreFill = styled('div', {
-  shouldForwardProp: (prop) => prop !== 'width' && prop !== 'color' && prop !== 'align',
-})<{ width: number; color: string; align: 'left' | 'right' }>(({ width, color, align }) => ({
-  position: 'absolute',
-  width: `${width}px`,
-  height: '100%',
-  backgroundColor: color,
-  [align]: 0,
-  top: 0,
-}));
+// const PrivacyScoreFill = styled('div', {
+//   shouldForwardProp: (prop) => prop !== 'width' && prop !== 'color' && prop !== 'align',
+// })<{ width: number; color: string; align: 'left' | 'right' }>(({ width, color, align }) => ({
+//   position: 'absolute',
+//   width: `${width}px`,
+//   height: '100%',
+//   backgroundColor: color,
+//   [align]: 0,
+//   top: 0,
+// }));
 
-const PrivacyScoreVerticalLine = styled('div')(() => ({
-  position: 'absolute',
-  left: '62px',
-  top: 0,
-  width: '2px',
-  height: '16px',
-  backgroundColor: '#4D4D4D',
-  zIndex: 1,
-}));
+// const PrivacyScoreVerticalLine = styled('div')(() => ({
+//   position: 'absolute',
+//   left: '62px',
+//   top: 0,
+//   width: '2px',
+//   height: '16px',
+//   backgroundColor: '#4D4D4D',
+//   zIndex: 1,
+// }));

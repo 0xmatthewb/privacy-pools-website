@@ -23,8 +23,9 @@ const ALL_TOKEN_OPTIONS: Option[] = [
   { value: 'sUSDS', label: 'sUSDS' },
   { value: 'USDe', label: 'USDe' },
   { value: 'USD1', label: 'USD1' },
-  { value: 'FRXUSD', label: 'FRXUSD' },
+  { value: 'frxUSD', label: 'frxUSD' },
   { value: 'DAI', label: 'DAI' },
+  { value: 'yUSND', label: 'yUSND' },
 ];
 
 export const AssetSelect: React.FC = () => {
