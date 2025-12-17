@@ -28,7 +28,10 @@ export const Resume = () => {
   const amount = formatUnits(selectedHistoryData?.amount ?? 0n, decimals);
   const usdBalance = getUsdBalance(price, formatUnits(selectedHistoryData?.amount ?? 0n, decimals), decimals);
   const poolAccountName = useMemo(() => {
-    const name = poolAccounts.find((pool) => pool.deposit.label === selectedHistoryData?.label)?.name;
+    // Convert both to strings to handle bigint vs string comparison
+    const name = poolAccounts.find(
+      (pool) => pool.deposit.label.toString() === selectedHistoryData?.label?.toString(),
+    )?.name;
     return name ? `PA-${name}` : 'Unknown Pool Account';
   }, [poolAccounts, selectedHistoryData]);
 
