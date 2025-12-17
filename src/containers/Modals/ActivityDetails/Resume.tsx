@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Stack, Typography, styled } from '@mui/material';
 import { formatUnits } from 'viem';
 import { ExtendedTooltip as Tooltip, StatusChip } from '~/components';
+import { chainData } from '~/config';
 import { getConstants } from '~/config/constants';
 import { useAccountContext, usePoolAccountsContext, useChainContext } from '~/hooks';
 import { ReviewStatus } from '~/types';
@@ -11,13 +12,18 @@ export const Resume = () => {
   const { PENDING_STATUS_MESSAGE } = getConstants();
   const { poolAccounts } = useAccountContext();
   const { selectedHistoryData } = usePoolAccountsContext();
-  const {
-    price,
-    balanceBN: { decimals: balanceDecimals },
-    selectedPoolInfo: { assetDecimals, asset },
-  } = useChainContext();
+  const { price } = useChainContext();
 
-  const decimals = assetDecimals ?? balanceDecimals ?? 18;
+  // Look up the correct pool info based on the history data's chain and scope
+  const historyPoolInfo = useMemo(() => {
+    if (!selectedHistoryData?.chainId || !selectedHistoryData?.scope) return null;
+    const chain = chainData[selectedHistoryData.chainId];
+    if (!chain) return null;
+    return chain.poolInfo.find((p) => p.scope === selectedHistoryData.scope) ?? null;
+  }, [selectedHistoryData?.chainId, selectedHistoryData?.scope]);
+
+  const decimals = historyPoolInfo?.assetDecimals ?? 18;
+  const asset = historyPoolInfo?.asset ?? 'ETH';
 
   const amount = formatUnits(selectedHistoryData?.amount ?? 0n, decimals);
   const usdBalance = getUsdBalance(price, formatUnits(selectedHistoryData?.amount ?? 0n, decimals), decimals);

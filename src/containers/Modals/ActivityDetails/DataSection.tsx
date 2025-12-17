@@ -1,23 +1,33 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Stack, styled, Typography } from '@mui/material';
 import { formatUnits } from 'viem';
 import { ExtendedTooltip as Tooltip } from '~/components';
+import { chainData } from '~/config';
 import { useExternalServices, usePoolAccountsContext, useChainContext, useTransactionFee } from '~/hooks';
 import { EventType } from '~/types';
 import { formatDataNumber, formatTimestamp, getUsdBalance, truncateAddress } from '~/utils';
 
 export const DataSection = () => {
-  const {
-    selectedPoolInfo: { assetDecimals, asset, entryPointAddress },
-    balanceBN: { decimals: balanceDecimals },
-    price,
-  } = useChainContext();
+  const { price } = useChainContext();
   const { vettingFeeBPS, selectedHistoryData } = usePoolAccountsContext();
   const { currentSelectedRelayerData } = useExternalServices();
   const isDeposit = selectedHistoryData?.type === EventType.DEPOSIT;
   const isExit = selectedHistoryData?.type === EventType.EXIT;
   const isWithdrawal = !isDeposit && !isExit;
+
+  // Look up the correct pool info based on the history data's chain and scope
+  const historyPoolInfo = useMemo(() => {
+    if (!selectedHistoryData?.chainId || !selectedHistoryData?.scope) return null;
+    const chain = chainData[selectedHistoryData.chainId];
+    if (!chain) return null;
+    return chain.poolInfo.find((p) => p.scope === selectedHistoryData.scope) ?? null;
+  }, [selectedHistoryData?.chainId, selectedHistoryData?.scope]);
+
+  const decimals = historyPoolInfo?.assetDecimals ?? 18;
+  const asset = historyPoolInfo?.asset ?? 'ETH';
+  const entryPointAddress = historyPoolInfo?.entryPointAddress;
 
   const aspOrRelayer = {
     label: isDeposit ? 'ASP' : 'Relayer',
@@ -27,8 +37,6 @@ export const DataSection = () => {
   // Temporarily disabled
   // const fromAddress = isDeposit ? selectedHistoryData?.address : '';
   // const toAddress = isDeposit ? '' : selectedHistoryData?.address;
-
-  const decimals = assetDecimals ?? balanceDecimals ?? 18;
   const amountInWei = BigInt(selectedHistoryData?.amount ?? 0n);
 
   // Fetch actual fee from on-chain data for withdrawals
