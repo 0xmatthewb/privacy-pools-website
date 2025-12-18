@@ -290,7 +290,8 @@ export const DepositForm = () => {
     enabled: !!selectedAlternativeToken && !!publicClient && !!amount && amount !== '0',
   });
 
-  const balanceUI = formatDataNumber(effectiveBalanceBN, decimals, 3, false, true, false);
+  // Use floor=true to truncate instead of round, so displayed balance is never > actual balance
+  const balanceUI = formatDataNumber(effectiveBalanceBN, decimals, 3, false, true, false, undefined, true);
   // const balanceFormatted = formatEther(BigInt(balanceBN));
 
   const stakingNote =

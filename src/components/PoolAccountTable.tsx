@@ -147,7 +147,7 @@ export const PoolAccountTable = ({ records }: { records: PoolAccount[] }) => {
 
                   <STableCell sx={{ whiteSpace: 'nowrap' }}>
                     <Tooltip title={formatUnits(row.balance, decimals)} placement='top' disableInteractive>
-                      <Typography variant='caption'>{`${formatDataNumber(row.balance, decimals, 3, false, true, false)} ${symbol}`}</Typography>
+                      <Typography variant='caption'>{`${formatDataNumber(row.balance, decimals, 3, false, true, false, undefined, true)} ${symbol}`}</Typography>
                     </Tooltip>
                   </STableCell>
 

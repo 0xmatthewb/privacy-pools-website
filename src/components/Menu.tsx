@@ -59,7 +59,8 @@ export const Menu = () => {
   const canDownloadSeedphrase = signupMethod === 'wallet';
 
   const ethBalanceBN = value.toString() ?? '0';
-  const balance = formatDataNumber(ethBalanceBN, decimals, 2, false, false, false);
+  // Use floor=true to truncate instead of round, so displayed balance is never > actual balance
+  const balance = formatDataNumber(ethBalanceBN, decimals, 2, false, false, false, undefined, true);
   const usdBalance = getUsdBalance(price, formatUnits(value, decimals), decimals);
 
   const goTo = useGoTo();

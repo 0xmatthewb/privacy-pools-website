@@ -18,6 +18,8 @@ export const getUsdBalance = (price: number | null, balance: string, decimals: n
  * @param currency Format as currency
  * @param compact Format as compact
  * @param smallDecimal Format small numbers with significant digits
+ * @param significantDigits Number of significant digits for small numbers
+ * @param floor Truncate (floor) instead of rounding - useful for balance display
  * @returns Formatted number
  */
 export function formatDataNumber(
@@ -28,6 +30,7 @@ export function formatDataNumber(
   compact?: boolean,
   smallDecimal?: boolean,
   significantDigits?: number,
+  floor?: boolean,
 ) {
   if (typeof input === 'number' || typeof input === 'bigint') {
     input = input.toString();
@@ -50,6 +53,12 @@ export function formatDataNumber(
   if (smallDecimal) {
     const factor = Math.pow(10, formatDecimal);
     res = Math.ceil(res * factor) / factor;
+  }
+
+  // Apply floor/truncate if requested (useful for balance display to avoid showing more than user has)
+  if (floor) {
+    const factor = Math.pow(10, formatDecimal);
+    res = Math.floor(res * factor) / factor;
   }
 
   const notation = compact ? 'compact' : 'standard';
