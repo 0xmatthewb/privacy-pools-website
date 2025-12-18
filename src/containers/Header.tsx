@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { styled } from '@mui/material/styles';
 import { Disclaimer, Logo, Menu, SignInButton } from '~/components';
-import { ChainSelect } from '~/components/ChainSelect';
 import { useAuthContext } from '~/hooks';
 import { zIndex } from '~/utils';
 
@@ -21,8 +20,6 @@ export const Header = () => {
           </Link>
         </LeftSection>
         <Actions>
-          <ChainSelect />
-
           {!isConnected && <SignInButton />}
           {isConnected && <Menu />}
         </Actions>
