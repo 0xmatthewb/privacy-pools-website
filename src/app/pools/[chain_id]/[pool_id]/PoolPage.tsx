@@ -31,6 +31,15 @@ const formatCompactNumber = (num: number, decimals = 2): string => {
   if (num >= 100_000) {
     return (num / 1_000).toFixed(1).replace(/\.?0+$/, '') + 'K';
   }
+  // For small values (< 1), show decimals instead of rounding to 0
+  if (num > 0 && num < 1) {
+    // Use floor to avoid showing more than actual (e.g., 0.019 -> 0.01, not 0.02)
+    const floored = Math.floor(num * 100) / 100;
+    if (floored < 0.01) {
+      return '<0.01';
+    }
+    return floored.toFixed(2).replace(/\.?0+$/, '');
+  }
   return Math.round(num).toLocaleString('en-US');
 };
 
