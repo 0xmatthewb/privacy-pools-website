@@ -4,7 +4,7 @@ import { createContext, useEffect, useMemo, useState, useRef, useCallback } from
 import { useQueries } from '@tanstack/react-query';
 import { parseEther } from 'viem';
 import { useAccount, useBalance, usePublicClient } from 'wagmi';
-import { ChainData, chainData, ChainAssets, whitelistedChains, PoolInfo, getConfig } from '~/config';
+import { ChainData, chainData, allPoolsChainData, ChainAssets, whitelistedChains, PoolInfo, getConfig } from '~/config';
 import { useNotifications } from '~/hooks';
 import { fetchTokenPrice, relayerClient } from '~/utils';
 
@@ -39,6 +39,10 @@ type ContextType = {
   selectedAsset: ChainAssets;
   setSelectedAsset: (value: ChainAssets) => void;
   selectedPoolInfo: PoolInfo;
+  // Chain filter for All Pools page
+  selectedChainIds: number[];
+  setSelectedChainIds: (value: number[]) => void;
+  allPoolsChains: { chainId: number; name: string; icon: string }[];
 };
 
 interface Props {
@@ -61,6 +65,20 @@ export const ChainProvider = ({ children }: Props) => {
   const [selectedRelayer, setSelectedRelayer] = useState<SelectedRelayerType | undefined>(
     () => chainData[chainId].relayers[0],
   );
+  const [selectedChainIds, setSelectedChainIds] = useState<number[]>([]);
+
+  // Get all chains available in allPoolsChainData for the chain filter
+  const allPoolsChains = useMemo(() => {
+    return Object.entries(allPoolsChainData).map(([id, chain]) => ({
+      chainId: parseInt(id),
+      name: chain.name,
+      icon: chain.image,
+    }));
+  }, []);
+
+  const handleSetSelectedChainIds = useCallback((value: number[]) => {
+    setSelectedChainIds(value);
+  }, []);
 
   const handleSetSelectedAsset = useCallback((value: ChainAssets) => {
     setSelectedAsset(value);
@@ -221,6 +239,9 @@ export const ChainProvider = ({ children }: Props) => {
       selectedAsset,
       setSelectedAsset: handleSetSelectedAsset,
       selectedPoolInfo,
+      selectedChainIds,
+      setSelectedChainIds: handleSetSelectedChainIds,
+      allPoolsChains,
     }),
     [
       handleSetChainId,
@@ -239,6 +260,9 @@ export const ChainProvider = ({ children }: Props) => {
       hasSomeRelayerAvailable,
       selectedAsset,
       handleSetSelectedAsset,
+      selectedChainIds,
+      handleSetSelectedChainIds,
+      allPoolsChains,
     ],
   );
 
