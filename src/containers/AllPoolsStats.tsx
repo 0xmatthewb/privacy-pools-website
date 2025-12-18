@@ -949,6 +949,13 @@ const PoolsGrid = styled(Grid)(() => ({
   margin: 0,
 }));
 
+const PoolName = styled(Typography)(({ theme }) => ({
+  fontWeight: 600,
+  fontSize: '16px',
+  lineHeight: '100%',
+  color: theme.palette.text.primary,
+}));
+
 const PoolCardContainer = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'isLeftColumn' && prop !== 'isFirstRow',
 })<{ isLeftColumn: boolean; isFirstRow: boolean }>(({ theme, isLeftColumn, isFirstRow }) => ({
@@ -967,6 +974,9 @@ const PoolCardContainer = styled(Box, {
   transition: 'background-color 0.2s ease',
   '&:hover': {
     backgroundColor: theme.palette.grey[50],
+  },
+  [`&:hover ${PoolName}`]: {
+    textDecoration: 'underline',
   },
   [theme.breakpoints.down('sm')]: {
     borderRight: 'none',
@@ -993,6 +1003,9 @@ const SinglePoolCardContainer = styled(Box, {
   '&:hover': {
     backgroundColor: theme.palette.grey[50],
   },
+  [`&:hover ${PoolName}`]: {
+    textDecoration: 'underline',
+  },
 }));
 
 const GrowthOnlyCardContainer = styled(Box, {
@@ -1013,6 +1026,9 @@ const GrowthOnlyCardContainer = styled(Box, {
   borderTop: hasBorderTop ? `1px solid ${theme.palette.grey[600]}` : 'none',
   '&:hover': {
     backgroundColor: theme.palette.grey[50],
+  },
+  [`&:hover ${PoolName}`]: {
+    textDecoration: 'underline',
   },
 }));
 
@@ -1046,13 +1062,6 @@ const ChainIconOverlay = styled('div')(() => ({
   justifyContent: 'center',
   border: '1px solid #fff',
   overflow: 'hidden',
-}));
-
-const PoolName = styled(Typography)(({ theme }) => ({
-  fontWeight: 600,
-  fontSize: '16px',
-  lineHeight: '100%',
-  color: theme.palette.text.primary,
 }));
 
 const ChainName = styled(Typography)(() => ({
