@@ -359,7 +359,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
             <StatsColumn item xs={12} sm={2.4}>
               <StatLabel>Accepted Funds</StatLabel>
               <StatValue>
-                {formatCompactNumber(acceptedFundsToken)} {currentPoolInfo?.asset}
+                {formatCompactNumber(acceptedFundsToken)} <AssetLabel>{currentPoolInfo?.asset}</AssetLabel>
               </StatValue>
               <StatSubtext>${formatCompactNumber(acceptedFundsUsd)}</StatSubtext>
             </StatsColumn>
@@ -367,7 +367,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
             <StatsColumn item xs={12} sm={2.4}>
               <StatLabel>Pending Funds</StatLabel>
               <StatValue>
-                {formatCompactNumber(pendingFundsToken)} {currentPoolInfo?.asset}
+                {formatCompactNumber(pendingFundsToken)} <AssetLabel>{currentPoolInfo?.asset}</AssetLabel>
               </StatValue>
               <StatSubtext>${formatCompactNumber(pendingFundsUsd)}</StatSubtext>
             </StatsColumn>
@@ -380,7 +380,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
             <StatsColumn item xs={12} sm={2.4}>
               <StatLabel>My Funds</StatLabel>
               <StatValue>
-                {formatCompactNumber(myFundsToken)} {currentPoolInfo?.asset}
+                {formatCompactNumber(myFundsToken)} <AssetLabel>{currentPoolInfo?.asset}</AssetLabel>
               </StatValue>
               <StatSubtext>${formatCompactNumber(myFundsUsd)}</StatSubtext>
             </StatsColumn>
@@ -779,6 +779,13 @@ const StatSubtext = styled(Typography)(() => ({
   fontSize: '12px',
   lineHeight: '100%',
   color: '#4D4D4D',
+}));
+
+const AssetLabel = styled('span')(() => ({
+  fontWeight: 700,
+  fontSize: '14px',
+  lineHeight: '100%',
+  color: '#000000',
 }));
 
 const ConnectContainer = styled(Box)(({ theme }) => ({
