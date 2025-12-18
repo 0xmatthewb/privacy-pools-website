@@ -421,6 +421,21 @@ export const AllPoolsStats = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('most-popular');
   const [sortSelectOpen, setSortSelectOpen] = useState(false);
+  const [filterChain, setFilterChain] = useState<string>('all');
+  const [chainSelectOpen, setChainSelectOpen] = useState(false);
+
+  // Build list of unique chains for the filter dropdown
+  const availableChains = useMemo(() => {
+    const chains: Array<{ chainId: string; name: string; icon?: string }> = [];
+    Object.entries(allPoolsChainData).forEach(([chainId, chain]) => {
+      chains.push({
+        chainId,
+        name: chain.name,
+        icon: chain.image,
+      });
+    });
+    return chains;
+  }, []);
 
   // Get ASP endpoints for test and non-test chains
   const { ASP_ENDPOINT_TEST, ASP_ENDPOINT_NON_TEST } = getConfig().env;
@@ -525,9 +540,14 @@ export const AllPoolsStats = () => {
     return pools;
   }, [poolStatsMap]);
 
-  // Filter and sort pools based on search query and sort option
+  // Filter and sort pools based on search query, chain filter, and sort option
   const filteredPools = useMemo(() => {
     let pools = allPools;
+
+    // Filter by chain
+    if (filterChain !== 'all') {
+      pools = pools.filter((pool) => pool.chainId === parseInt(filterChain));
+    }
 
     // Filter by search query
     if (searchQuery.trim()) {
@@ -612,7 +632,7 @@ export const AllPoolsStats = () => {
     });
 
     return sortedPools;
-  }, [allPools, searchQuery, sortBy]);
+  }, [allPools, searchQuery, sortBy, filterChain]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -620,6 +640,10 @@ export const AllPoolsStats = () => {
 
   const handleSortChange = (e: SelectChangeEvent<unknown>) => {
     setSortBy(e.target.value as SortOption);
+  };
+
+  const handleChainFilterChange = (e: SelectChangeEvent<unknown>) => {
+    setFilterChain(e.target.value as string);
   };
 
   return (
@@ -636,6 +660,84 @@ export const AllPoolsStats = () => {
           </Stack>
 
           <FilterRow>
+            <ChainFilterSelect
+              value={filterChain}
+              onChange={handleChainFilterChange}
+              size='small'
+              open={chainSelectOpen}
+              onOpen={() => setChainSelectOpen(true)}
+              onClose={() => setChainSelectOpen(false)}
+              IconComponent={() => null}
+              renderValue={(value) => {
+                const chainValue = value as string;
+                if (chainValue === 'all') {
+                  return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>All Chains</span>
+                      <svg
+                        width='20'
+                        height='20'
+                        viewBox='0 0 20 20'
+                        fill='none'
+                        xmlns='http://www.w3.org/2000/svg'
+                        style={{
+                          transform: chainSelectOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                        }}
+                      >
+                        <path
+                          d='M6.17917 7.15414L10 10.975L13.8208 7.15414L15 8.33331L10 13.3333L5 8.33331L6.17917 7.15414Z'
+                          fill='#282828'
+                        />
+                      </svg>
+                    </Box>
+                  );
+                }
+                const chain = availableChains.find((c) => c.chainId === chainValue);
+                return (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {chain?.icon && <Image src={chain.icon} alt={chain.name} width={16} height={16} />}
+                    <span>{chain?.name || chainValue}</span>
+                    <svg
+                      width='20'
+                      height='20'
+                      viewBox='0 0 20 20'
+                      fill='none'
+                      xmlns='http://www.w3.org/2000/svg'
+                      style={{
+                        transform: chainSelectOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease',
+                      }}
+                    >
+                      <path
+                        d='M6.17917 7.15414L10 10.975L13.8208 7.15414L15 8.33331L10 13.3333L5 8.33331L6.17917 7.15414Z'
+                        fill='#282828'
+                      />
+                    </svg>
+                  </Box>
+                );
+              }}
+              MenuProps={{
+                PaperProps: {
+                  sx: {
+                    '& .MuiMenuItem-root': {
+                      fontSize: '12px',
+                    },
+                  },
+                },
+              }}
+            >
+              <MenuItem value='all'>All Chains</MenuItem>
+              {availableChains.map((chain) => (
+                <MenuItem key={chain.chainId} value={chain.chainId}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {chain.icon && <Image src={chain.icon} alt={chain.name} width={16} height={16} />}
+                    <span>{chain.name}</span>
+                  </Box>
+                </MenuItem>
+              ))}
+            </ChainFilterSelect>
+
             <SortSelect
               value={sortBy}
               onChange={handleSortChange}
@@ -774,6 +876,30 @@ const FilterRow = styled(Stack)(({ theme }) => ({
     flexDirection: 'column',
     alignItems: 'stretch',
     gap: theme.spacing(1),
+  },
+}));
+
+const ChainFilterSelect = styled(Select)(({ theme }) => ({
+  minWidth: '140px',
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '16px',
+  color: '#202224',
+  backgroundColor: theme.palette.background.paper,
+  '& .MuiOutlinedInput-notchedOutline': {
+    border: 'none',
+  },
+  '&:hover .MuiOutlinedInput-notchedOutline': {
+    border: 'none',
+  },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+    border: 'none',
+  },
+  '& .MuiSelect-select': {
+    fontWeight: 400,
+    fontSize: '12px',
+    lineHeight: '16px',
+    color: '#202224',
   },
 }));
 
