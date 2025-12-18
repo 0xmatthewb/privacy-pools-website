@@ -296,7 +296,9 @@ const PoolCard = ({
             </IconWrapper>
           )}
           <Stack direction='column' gap='2px'>
-            <PoolName variant='body1'>{pool.asset} Pool</PoolName>
+            <PoolName variant='body1' sx={{ '&:hover': { textDecoration: 'underline' } }}>
+              {pool.asset} Pool
+            </PoolName>
             <ChainName variant='caption'>{pool.chainName}</ChainName>
           </Stack>
         </Stack>
@@ -356,7 +358,9 @@ const BalanceOnlyCard = ({
             </IconWrapper>
           )}
           <Stack direction='column' gap='2px'>
-            <PoolName variant='body1'>{pool.asset} Pool</PoolName>
+            <PoolName variant='body1' sx={{ '&:hover': { textDecoration: 'underline' } }}>
+              {pool.asset} Pool
+            </PoolName>
             <ChainName variant='caption'>{pool.chainName}</ChainName>
           </Stack>
         </Stack>
@@ -446,9 +450,6 @@ const PoolCardContainer = styled(Box, {
   '&:hover': {
     backgroundColor: theme.palette.grey[50],
   },
-  [`&:hover ${PoolName}`]: {
-    textDecoration: 'underline',
-  },
   [theme.breakpoints.down('sm')]: {
     borderRight: 'none',
     borderLeft: 'none',
@@ -473,9 +474,6 @@ const SinglePoolCardContainer = styled(Box, {
   borderTop: hasBorderTop ? `1px solid ${theme.palette.grey[600]}` : 'none',
   '&:hover': {
     backgroundColor: theme.palette.grey[50],
-  },
-  [`&:hover ${PoolName}`]: {
-    textDecoration: 'underline',
   },
 }));
 
