@@ -339,6 +339,9 @@ const mainnetChainData: ChainData = {
         color: '#627EEA',
         isStableAsset: true,
         isNativeToken: false,
+        relayersOverride: [
+          { name: 'Fast Relay', url: 'https://relayer-staging-github-deployed-149184580131.us-east1.run.app' },
+        ],
       },
     ],
   },
