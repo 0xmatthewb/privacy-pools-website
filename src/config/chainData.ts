@@ -9,6 +9,7 @@ import arbitrumIcon from '~/assets/icons/arbitrum.svg';
 // import bscIcon from '~/assets/icons/bsc.svg';
 import daiIcon from '~/assets/icons/dai.svg';
 import frxusdIcon from '~/assets/icons/frxusd.svg';
+import fxusdIcon from '~/assets/icons/fxusd.svg';
 import mainnetIcon from '~/assets/icons/mainnet_color.svg';
 import optimismIcon from '~/assets/icons/optimism.svg';
 import susdsIcon from '~/assets/icons/susds.svg';
@@ -45,7 +46,8 @@ export type ChainAssets =
   | 'frxUSD'
   | 'WOETH'
   | 'BNB'
-  | 'yUSND';
+  | 'yUSND'
+  | 'fxUSD';
 
 export interface AlternativeTokenConfig {
   tokenAddress: Address;
@@ -84,6 +86,10 @@ export interface PoolInfo {
     source: string; // Description of yield source (e.g., "Savings USDS staking rewards")
   };
   priceConversion?: PriceConversionConfig; // Custom price conversion config
+  relayersOverride?: {
+    name: string;
+    url: string;
+  }[]; // Pool-specific relayers that override chain defaults
 }
 
 export interface ChainData {
@@ -318,6 +324,24 @@ const mainnetChainData: ChainData = {
           conversionMethod: 'convertToAssets',
           conversionAbi: woethAbi,
         },
+      },
+      {
+        chainId: mainnet.id,
+        address: '0xD14F4B36E1D1D98c218db782c49149876042BC56',
+        assetAddress: '0x085780639CC2cACd35E474e71f4d000e2405d8f6',
+        scope: 18721688563067625530889443380856806549268759616049984113232683385397425859801n,
+        deploymentBlock: 23988640n,
+        entryPointAddress: '0x6818809EefCe719E480a7526D76bD3e561526b46',
+        maxDeposit: parseUnits('1000000', 18),
+        asset: 'fxUSD',
+        assetDecimals: 18,
+        icon: fxusdIcon.src,
+        color: '#627EEA',
+        isStableAsset: true,
+        isNativeToken: false,
+        relayersOverride: [
+          { name: 'Fast Relay', url: 'https://relayer-staging-github-deployed-149184580131.us-east1.run.app' },
+        ],
       },
     ],
   },
