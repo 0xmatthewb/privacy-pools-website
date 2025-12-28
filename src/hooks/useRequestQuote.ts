@@ -4,7 +4,7 @@ import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { Address } from 'viem';
 import { useQuoteContext } from '~/contexts/QuoteContext';
 import { QuoteRequestBody, QuoteResponse, FeeCommitment } from '~/types';
-import { calculateRemainingTime } from '~/utils';
+import { calculateRemainingTime, debounce } from '~/utils';
 
 let globalTimerInstanceActive = false;
 
@@ -55,7 +55,9 @@ export const useRequestQuote = ({
   const { quoteState, setQuoteData, updateCountdown, resetQuote, markAsExpired } = useQuoteContext();
   const isFetchingRef = useRef(false);
   const previousExtraGasRef = useRef(quoteState.extraGas);
+  const previousAmountRef = useRef(amountBN);
   const expiredNotificationSentRef = useRef<string | null>(null);
+  const executeFetchAndSetQuoteRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const timerIdRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const currentQuoteIdRef = useRef<string | null>(null);
 
@@ -130,6 +132,18 @@ export const useRequestQuote = ({
     setQuoteData,
   ]);
 
+  // Keep ref updated with latest function
+  useEffect(() => {
+    executeFetchAndSetQuoteRef.current = executeFetchAndSetQuote;
+  }, [executeFetchAndSetQuote]);
+
+  // Create a stable debounced refetch function for amount changes
+  const debouncedRefetchForAmount = useMemo(() => {
+    return debounce(() => {
+      executeFetchAndSetQuoteRef.current();
+    }, 500);
+  }, []);
+
   // Effect to fetch quote initially or when relevant inputs change
   useEffect(() => {
     if (canRequestQuote && !quoteState.quoteCommitment && !quoteState.isExpired) {
@@ -151,6 +165,24 @@ export const useRequestQuote = ({
       previousExtraGasRef.current = quoteState.extraGas;
     }
   }, [quoteState.extraGas, canRequestQuote, quoteState.quoteCommitment, quoteState.isExpired, executeFetchAndSetQuote]);
+
+  // Effect to refetch quote when amount changes (debounced to avoid requests while typing)
+  useEffect(() => {
+    // Only refetch if we already have a quote and amount actually changed
+    if (
+      canRequestQuote &&
+      quoteState.quoteCommitment &&
+      !quoteState.isExpired &&
+      previousAmountRef.current !== amountBN
+    ) {
+      previousAmountRef.current = amountBN;
+      debouncedRefetchForAmount();
+    }
+
+    return () => {
+      debouncedRefetchForAmount.cancel();
+    };
+  }, [amountBN, canRequestQuote, quoteState.quoteCommitment, quoteState.isExpired, debouncedRefetchForAmount]);
 
   const startTimer = useCallback((quoteId: string, initialCountdown: number) => {
     if (timerIdRef.current || globalTimerInstanceActive) {
