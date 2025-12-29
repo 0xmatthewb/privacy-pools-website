@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1] - 2025-12-28
+
+### Fixed
+
+- Fixed incorrect withdrawal fee calculation
+
+## [2.6.0] - 2025-12-22
+
+### Added
+
+- Added fxUSD pool support
+
+## [2.5.0] - 2025-12-18
+
+### Added
+
+- Added Optimism pools support
+
+## [2.4.0] - 2025-12-17
+
+### Added
+
+- Added multichain support
+
+### Changed
+
+- Refactored UI and homepage view
+- Updated withdraw process
+
+### Fixed
+
+- Various bug fixes and performance improvements
+
+## [2.3.0] - 2025-11-13
+
+### Changed
+
+- Bumped position of active pools
+
 ## [2.2.0] - 2025-10-10
 
 ### Added
