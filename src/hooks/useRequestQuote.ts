@@ -36,6 +36,8 @@ interface UseRequestQuoteReturn {
   isQuoteLoading: boolean;
   quoteError: Error | null;
   isExpired: boolean;
+  quotedAmount: string | null;
+  canRequestQuote: boolean;
   requestNewQuote: () => Promise<void>;
 }
 
@@ -56,6 +58,7 @@ export const useRequestQuote = ({
   const isFetchingRef = useRef(false);
   const previousExtraGasRef = useRef(quoteState.extraGas);
   const expiredNotificationSentRef = useRef<string | null>(null);
+  const executeFetchAndSetQuoteRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const timerIdRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const currentQuoteIdRef = useRef<string | null>(null);
 
@@ -69,13 +72,13 @@ export const useRequestQuote = ({
     addNotificationRef.current = addNotification;
   }, [updateCountdown, markAsExpired, addNotification]);
 
-  const canRequestQuote = useMemo(() => {
+  const canRequestQuote = useMemo((): boolean => {
     return (
       isValidAmount &&
-      recipient &&
+      !!recipient &&
       isRecipientAddressValid &&
       isRelayerSelected &&
-      assetAddress &&
+      !!assetAddress &&
       chainId !== undefined &&
       amountBN > 0n
     );
@@ -87,10 +90,11 @@ export const useRequestQuote = ({
     }
 
     isFetchingRef.current = true;
+    const requestedAmount = amountBN.toString();
     try {
       const quoteInput = {
         chainId,
-        amount: amountBN.toString(),
+        amount: requestedAmount,
         asset: assetAddress,
         recipient,
         extraGas: quoteState.extraGas,
@@ -108,6 +112,7 @@ export const useRequestQuote = ({
         newQuoteData.detail?.extraGasFundAmount?.eth || null,
         newQuoteData.detail?.relayTxCost?.eth || null,
         remainingTime,
+        requestedAmount,
       );
     } catch (err) {
       const errorMessage = `Failed to get quote: ${err instanceof Error ? err.message : 'Unknown error'}`;
@@ -130,14 +135,17 @@ export const useRequestQuote = ({
     setQuoteData,
   ]);
 
-  // Effect to fetch quote initially or when relevant inputs change
+  // Keep ref updated with latest function
   useEffect(() => {
-    if (canRequestQuote && !quoteState.quoteCommitment && !quoteState.isExpired) {
-      executeFetchAndSetQuote();
-    } else if (!canRequestQuote) {
+    executeFetchAndSetQuoteRef.current = executeFetchAndSetQuote;
+  }, [executeFetchAndSetQuote]);
+
+  // Reset quote when form becomes invalid
+  useEffect(() => {
+    if (!canRequestQuote) {
       resetQuote();
     }
-  }, [canRequestQuote, executeFetchAndSetQuote, resetQuote, quoteState.quoteCommitment, quoteState.isExpired]);
+  }, [canRequestQuote, resetQuote]);
 
   // Effect to refetch quote when extraGas changes (only if we already have a quote)
   useEffect(() => {
@@ -240,6 +248,8 @@ export const useRequestQuote = ({
     isQuoteLoading,
     quoteError,
     isExpired: quoteState.isExpired,
+    quotedAmount: quoteState.quotedAmount,
+    canRequestQuote,
     requestNewQuote,
   };
 };
