@@ -25,3 +25,4 @@ export * from './context/useAuthContext';
 export * from './context/useNotificationsContext';
 export * from './useFeatureFlag';
 export * from './useTransactionFee';
+export * from './useSelfReport';
