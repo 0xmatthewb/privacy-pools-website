@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SiweMessage } from 'siwe';
 
 // Get ASP endpoint from environment
 const ASP_ENDPOINT = process.env.NEXT_PUBLIC_ASP_ENDPOINT_NON_TEST || process.env.NEXT_PUBLIC_ASP_ENDPOINT_TEST;
 
 interface ReportAddressRequest {
   address: string;
+  nonce: string;
   message: string;
   signature: string;
 }
@@ -13,37 +13,17 @@ interface ReportAddressRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: ReportAddressRequest = await request.json();
-    const { address, message, signature } = body;
+    const { address, nonce, message, signature } = body;
 
     // Validate required fields
-    if (!address || !message || !signature) {
-      return NextResponse.json({ error: 'Missing required fields: address, message, signature' }, { status: 400 });
+    if (!address || !nonce || !message || !signature) {
+      return NextResponse.json(
+        { error: 'Missing required fields: address, nonce, message, signature' },
+        { status: 400 },
+      );
     }
 
-    // Verify SIWE signature on website side first
-    try {
-      const siweMessage = new SiweMessage(message);
-      const result = await siweMessage.verify({ signature });
-
-      if (!result.success) {
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
-      }
-
-      // Verify the address matches
-      if (siweMessage.address.toLowerCase() !== address.toLowerCase()) {
-        return NextResponse.json({ error: 'Address mismatch in signature' }, { status: 400 });
-      }
-
-      // Verify the message contains the expected statement about compromised address
-      if (!siweMessage.statement?.includes('compromised')) {
-        return NextResponse.json({ error: 'Invalid message statement' }, { status: 400 });
-      }
-    } catch (verifyError) {
-      console.error('SIWE verification error:', verifyError);
-      return NextResponse.json({ error: 'Signature verification failed' }, { status: 400 });
-    }
-
-    // Forward to ASP backend for double verification and storage
+    // Forward to ASP backend for verification and storage
     if (!ASP_ENDPOINT) {
       console.error('ASP_ENDPOINT not configured');
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
@@ -56,6 +36,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         address,
+        nonce,
         message,
         signature,
         reason: 'self_reported_compromised',

@@ -10,8 +10,14 @@ interface SelfReportState {
   error: string | null;
 }
 
+interface NonceResponse {
+  nonce: string;
+  message: string;
+  expiresAt: string;
+}
+
 export function useSelfReport() {
-  const { address, chainId } = useAccount();
+  const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const { addNotification } = useNotifications();
 
@@ -20,37 +26,6 @@ export function useSelfReport() {
     isSuccess: false,
     error: null,
   });
-
-  const buildSiweMessage = useCallback(
-    (nonce: string) => {
-      if (!address || !chainId) return null;
-
-      const domain = typeof window !== 'undefined' ? window.location.host : 'privacypools.com';
-      const uri = typeof window !== 'undefined' ? window.location.origin : 'https://privacypools.com';
-      const issuedAt = new Date().toISOString();
-
-      // SIWE message format per EIP-4361
-      const message = `${domain} wants you to sign in with your Ethereum account:
-${address}
-
-I am reporting that my deposit address private key has been compromised. All deposits from this address should be blocked from anonymous withdrawal.
-
-URI: ${uri}
-Version: 1
-Chain ID: ${chainId}
-Nonce: ${nonce}
-Issued At: ${issuedAt}`;
-
-      return message;
-    },
-    [address, chainId],
-  );
-
-  const generateNonce = useCallback(() => {
-    const array = new Uint8Array(16);
-    crypto.getRandomValues(array);
-    return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  }, []);
 
   const reportCompromisedAddress = useCallback(async () => {
     if (!address) {
@@ -61,17 +36,20 @@ Issued At: ${issuedAt}`;
     setState({ isLoading: true, isSuccess: false, error: null });
 
     try {
-      const nonce = generateNonce();
-      const message = buildSiweMessage(nonce);
+      // Step 1: Get nonce and message from ASP
+      const nonceResponse = await fetch(`/api/self-report/nonce?address=${address}`);
+      const nonceData = await nonceResponse.json();
 
-      if (!message) {
-        throw new Error('Failed to build SIWE message');
+      if (!nonceResponse.ok) {
+        throw new Error(nonceData.error || 'Failed to get nonce');
       }
 
-      // Sign the message
+      const { nonce, message } = nonceData as NonceResponse;
+
+      // Step 2: Sign the server-generated message
       const signature = await signMessageAsync({ message });
 
-      // Send to API endpoint
+      // Step 3: Send to API endpoint
       const response = await fetch('/api/self-report', {
         method: 'POST',
         headers: {
@@ -79,6 +57,7 @@ Issued At: ${issuedAt}`;
         },
         body: JSON.stringify({
           address,
+          nonce,
           message,
           signature,
         }),
@@ -103,7 +82,7 @@ Issued At: ${issuedAt}`;
       }
       return false;
     }
-  }, [address, signMessageAsync, buildSiweMessage, generateNonce, addNotification]);
+  }, [address, signMessageAsync, addNotification]);
 
   const reset = useCallback(() => {
     setState({ isLoading: false, isSuccess: false, error: null });
