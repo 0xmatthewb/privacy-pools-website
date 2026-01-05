@@ -2,7 +2,7 @@
 
 import { MouseEvent, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Box, Checkbox, Divider, Menu as MuiMenu, MenuItem, styled, IconButton, Typography } from '@mui/material';
+import { Box, Checkbox, Menu as MuiMenu, MenuItem, styled, IconButton, Typography } from '@mui/material';
 import { useChainContext } from '~/hooks';
 import { zIndex } from '~/utils';
 
@@ -95,8 +95,6 @@ export const ChainSelect = () => {
             All Chains
           </Typography>
         </SMenuItem>
-
-        <Divider sx={{ my: 1 }} />
 
         {allPoolsChains.map((chain) => {
           const isSelected = allSelected || selectedChainIds.includes(chain.chainId);

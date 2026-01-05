@@ -3,7 +3,7 @@
 import { MouseEvent, useRef, useState } from 'react';
 import Image from 'next/image';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import { Box, Checkbox, Divider, Menu as MuiMenu, MenuItem, styled, Typography } from '@mui/material';
+import { Box, Checkbox, Menu as MuiMenu, MenuItem, styled, Typography } from '@mui/material';
 import { zIndex } from '~/utils';
 
 interface ChainOption {
@@ -110,8 +110,6 @@ export const ChainFilterSelect = ({ chains, selectedChainIds, onChange }: ChainF
             All Chains
           </Typography>
         </SMenuItem>
-
-        <Divider sx={{ my: 1 }} />
 
         {chains.map((chain) => {
           const isSelected = allSelected || selectedChainIds.includes(chain.chainId);
