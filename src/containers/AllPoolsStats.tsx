@@ -731,7 +731,6 @@ const HeaderSection = styled(Stack)(({ theme }) => ({
   justifyContent: 'space-between',
   alignItems: 'center',
   width: '100%',
-  marginBottom: theme.spacing(2),
   [theme.breakpoints.down('sm')]: {
     flexDirection: 'column',
     alignItems: 'flex-start',
