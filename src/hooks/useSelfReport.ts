@@ -37,7 +37,7 @@ export function useSelfReport() {
 
     try {
       // Step 1: Get nonce and message from ASP
-      const nonceResponse = await fetch(`/api/self-report/nonce?address=${address}`);
+      const nonceResponse = await fetch(`/api/self-report/nonce?address=${address}&action=report`);
       const nonceData = await nonceResponse.json();
 
       if (!nonceResponse.ok) {
