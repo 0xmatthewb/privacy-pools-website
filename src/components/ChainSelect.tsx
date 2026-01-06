@@ -2,9 +2,11 @@
 
 import { MouseEvent, useRef, useState } from 'react';
 import Image from 'next/image';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { Box, Checkbox, Menu as MuiMenu, MenuItem, styled, IconButton, Typography } from '@mui/material';
 import { useChainContext } from '~/hooks';
 import { zIndex } from '~/utils';
+import starknetIcon from '~/assets/icons/starknet.svg';
 
 export const ChainSelect = () => {
   const { allPoolsChains, selectedChainIds, setSelectedChainIds } = useChainContext();
@@ -113,6 +115,30 @@ export const ChainSelect = () => {
             </SMenuItem>
           );
         })}
+
+        <MenuItem
+          component='a'
+          href='https://starknet.privacypools.com'
+          target='_blank'
+          rel='noopener noreferrer'
+          onClick={handleClose}
+          sx={{
+            padding: '1.6rem 0',
+            fontSize: '1.6rem',
+            fontWeight: 400,
+            lineHeight: 'normal',
+            textDecoration: 'none',
+            color: 'inherit',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+            <Image src={starknetIcon} alt='Starknet' width={16} height={16} />
+            <Typography variant='body2' sx={{ fontWeight: 400, fontSize: '1.6rem' }}>
+              Starknet
+            </Typography>
+            <OpenInNewIcon sx={{ fontSize: 14, ml: 'auto', opacity: 0.6 }} />
+          </Box>
+        </MenuItem>
       </SMenu>
     </>
   );
