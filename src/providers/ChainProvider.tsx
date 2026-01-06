@@ -29,6 +29,7 @@ type ContextType = {
   setChainId: (value: number) => void;
   setBalanceInPool: (val: string) => void;
   price: number;
+  nativeAssetPrice: number;
   maxDeposit: string;
   selectedRelayer: SelectedRelayerType | undefined;
   setSelectedRelayer: (value: SelectedRelayerType | undefined) => void;
@@ -61,6 +62,7 @@ export const ChainProvider = ({ children }: Props) => {
   const { addNotification } = useNotifications();
   const [balanceInPoolBN, setBalanceInPool] = useState<string>(parseEther('100').toString());
   const [price, setPrice] = useState<number>(0);
+  const [nativeAssetPrice, setNativeAssetPrice] = useState<number>(0);
   const [selectedAsset, setSelectedAsset] = useState<ChainAssets>(DEFAULT_ASSET);
   const [selectedRelayer, setSelectedRelayer] = useState<SelectedRelayerType | undefined>(
     () => chainData[chainId].relayers[0],
@@ -152,6 +154,20 @@ export const ChainProvider = ({ children }: Props) => {
     }
   }, [addNotification, chain, selectedAsset, selectedPoolInfo, publicClient]);
 
+  // Fetch native asset price (e.g., ETH) for gas fee calculations
+  useEffect(() => {
+    if (chain) {
+      fetchTokenPrice(chain.symbol as ChainAssets)
+        .then((data) => {
+          setNativeAssetPrice(data);
+        })
+        .catch(() => {
+          setNativeAssetPrice(0);
+          console.error(`Error fetching ${chain.symbol} price for gas calculations`);
+        });
+    }
+  }, [chain]);
+
   const feesQueries = useQueries({
     queries: activeRelayers.map((relayer) => ({
       queryKey: ['relayerFees', relayer.url, chainId, selectedPoolInfo?.assetAddress],
@@ -228,6 +244,7 @@ export const ChainProvider = ({ children }: Props) => {
       balanceInPoolBN,
       setBalanceInPool: handleSetBalanceInPool,
       price,
+      nativeAssetPrice,
       maxDeposit: selectedPoolInfo?.maxDeposit.toString() ?? '0',
       chainId,
       selectedRelayer,
@@ -250,6 +267,7 @@ export const ChainProvider = ({ children }: Props) => {
       balanceInPoolBN,
       handleSetBalanceInPool,
       price,
+      nativeAssetPrice,
       selectedPoolInfo,
       chainId,
       selectedRelayer,
