@@ -45,6 +45,24 @@ interface DepositsLargerThanResponse {
   uniqueAmountsAbove: number;
 }
 
+// Define type for pool incentives stats response
+interface PoolIncentivesStats {
+  scope: string;
+  chainId: string;
+  currentTvlUsd: string;
+  avgTvlUsd: string;
+  avgTvlWindowDays: number;
+  tvlThresholdUsd: string;
+  isRolloverActive: boolean;
+  tokenSymbol: string;
+  tokenAddress: string;
+}
+
+interface PoolIncentivesStatsResponse {
+  pool: PoolIncentivesStats;
+  cacheTimestamp: string;
+}
+
 // Define type for time-based statistics
 interface TimeBasedStats {
   tvl: string;
@@ -138,6 +156,14 @@ const aspClient = {
 
   fetchGlobalStatistics: (aspUrl: string) =>
     fetchWithHeaders<GlobalStatisticsResponse>(`${aspUrl}/global/public/statistics`),
+
+  fetchPoolIncentivesStats: (aspUrl: string, chainId: number, scope: string, windowDays?: number) =>
+    fetchWithHeaders<PoolIncentivesStatsResponse>(
+      `${aspUrl}/${chainId}/public/pool-incentives-stats${windowDays ? `?windowDays=${windowDays}` : ''}`,
+      {
+        'X-Pool-Scope': scope,
+      },
+    ),
 };
 
 export { aspClient };
@@ -146,6 +172,8 @@ export type {
   PoolStatsResponse,
   DepositsLargerThanResponse,
   PoolStatisticsResponse,
+  PoolIncentivesStats,
+  PoolIncentivesStatsResponse,
   GlobalStatisticsResponse,
   TimeBasedStats,
 };
