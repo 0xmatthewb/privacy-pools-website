@@ -300,26 +300,69 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
     refetchInterval: 300000,
   });
 
-  // Calculate user's earned FXN incentives
-  // Formula: (user_deposit / total_pool_deposits) * fxn_per_epoch * (elapsed_time / epoch_duration)
+  // Calculate user's earned FXN incentives using time-weighted share
+  // This accounts for when each deposit was made relative to program start
   const userEarnedFxn = useMemo(() => {
-    if (!incentivesTimeline || !isLogged || acceptedFundsUsd === 0 || myFundsUsd === 0) {
+    if (!incentivesTimeline || !isLogged || acceptedFundsUsd === 0) {
       return { amount: 0, usdValue: 0 };
     }
 
     const { fxnPerEpoch, epochDurationDays, totalEpochs, startTimestamp } = FXUSD_INCENTIVES_CONFIG;
     const now = Date.now();
-    const elapsedMs = Math.max(0, now - startTimestamp);
-    const elapsedDays = elapsedMs / (24 * 60 * 60 * 1000);
-    const totalDays = epochDurationDays * totalEpochs;
+    const programEndTimestamp = startTimestamp + totalEpochs * epochDurationDays * 24 * 60 * 60 * 1000;
+    const cappedNow = Math.min(now, programEndTimestamp);
+    const totalProgramElapsedMs = Math.max(0, cappedNow - startTimestamp);
 
-    // Cap elapsed days at total program duration
-    const cappedElapsedDays = Math.min(elapsedDays, totalDays);
+    // If program hasn't started yet, no rewards
+    if (totalProgramElapsedMs === 0) {
+      return { amount: 0, usdValue: 0 };
+    }
 
-    // User's share of rewards = (user_deposit / total_deposits) * total_fxn * (elapsed / total_duration)
-    const userShare = myFundsUsd / acceptedFundsUsd;
+    // Calculate time-weighted deposit contribution for each user deposit
+    // For each deposit: contribution = depositAmount * timeInProgram
+    // timeInProgram = cappedNow - max(depositTimestamp, programStartTimestamp)
+    let userTimeWeightedContribution = 0;
+
+    for (const account of currentPoolAccounts) {
+      const depositTimestampMs = Number(account.deposit.timestamp) * 1000; // Convert seconds to ms
+      const balanceToken = Number(formatUnits(BigInt(account.balance || '0'), poolDecimals));
+
+      // Only count deposits with non-zero balance that were accepted (approved status)
+      if (balanceToken <= 0 || account.reviewStatus !== ReviewStatus.APPROVED) {
+        continue;
+      }
+
+      // Deposit only earns from when it joined (or program start if earlier)
+      const participationStart = Math.max(depositTimestampMs, startTimestamp);
+      const participationEnd = cappedNow;
+      const participationTimeMs = Math.max(0, participationEnd - participationStart);
+
+      // Contribution = balance * time participated (in USD terms for weighting)
+      const balanceUsd = balanceToken * (price || 0);
+      userTimeWeightedContribution += balanceUsd * participationTimeMs;
+    }
+
+    // If user has no time-weighted contribution, return 0
+    if (userTimeWeightedContribution === 0) {
+      return { amount: 0, usdValue: 0 };
+    }
+
+    // Total pool's time-weighted contribution (simplified: assumes pool TVL was constant)
+    // In reality, we'd need historical TVL data for perfect accuracy
+    // This approximation uses: totalPoolUsd * totalProgramElapsedTime
+    const totalPoolTimeWeightedContribution = acceptedFundsUsd * totalProgramElapsedMs;
+
+    // User's time-weighted share of the pool
+    const userTimeWeightedShare = userTimeWeightedContribution / totalPoolTimeWeightedContribution;
+
+    // Total FXN distributed so far (pro-rata based on elapsed time)
     const totalFxn = fxnPerEpoch * totalEpochs; // 225 FXN total
-    const earnedFxn = userShare * totalFxn * (cappedElapsedDays / totalDays);
+    const totalDays = epochDurationDays * totalEpochs;
+    const elapsedDays = totalProgramElapsedMs / (24 * 60 * 60 * 1000);
+    const fxnDistributedSoFar = totalFxn * Math.min(1, elapsedDays / totalDays);
+
+    // User's earned FXN
+    const earnedFxn = userTimeWeightedShare * fxnDistributedSoFar;
 
     const usdValue = earnedFxn * (fxnPrice || 0);
 
@@ -327,7 +370,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
       amount: earnedFxn,
       usdValue,
     };
-  }, [incentivesTimeline, isLogged, acceptedFundsUsd, myFundsUsd, fxnPrice]);
+  }, [incentivesTimeline, isLogged, acceptedFundsUsd, currentPoolAccounts, poolDecimals, price, fxnPrice]);
 
   useEffect(() => {
     // Parse and set the chain ID
