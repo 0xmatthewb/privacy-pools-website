@@ -6,19 +6,53 @@ import { useRouter } from 'next/navigation';
 import { Stack, Typography, Button, styled, Box, IconButton, Grid } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { formatUnits } from 'viem';
-import { useAccount } from 'wagmi';
+import { useAccount, usePublicClient } from 'wagmi';
 import { PoolAccountTable, ActivityTable } from '~/components';
 import { InfoTooltip } from '~/components/InfoTooltip';
 import { ChainAssets, chainData } from '~/config';
 import { Section, PAContainer, ActionMenu, ChainTokenSelectorDropdown } from '~/containers';
 import { useAuthContext, useGoTo, useModal, useAccountContext, useChainContext } from '~/hooks';
 import { EventType, ModalType, ReviewStatus } from '~/types';
-import { ROUTER, aspClient } from '~/utils';
+import { ROUTER, aspClient, fetchFxnPrice } from '~/utils';
 
 interface PoolPageProps {
   chainId: string;
   poolId: string;
 }
+
+// Incentives timeline configuration
+const FXUSD_INCENTIVES_CONFIG = {
+  startTimestamp: new Date('2025-12-22T16:30:35Z').getTime(), // Block 24069356
+  epochDurationDays: 30,
+  totalEpochs: 3,
+  fxnPerEpoch: 75, // 75 FXN distributed per epoch
+};
+
+// Calculate incentives timeline progress
+const calculateIncentivesTimeline = () => {
+  const { startTimestamp, epochDurationDays, totalEpochs } = FXUSD_INCENTIVES_CONFIG;
+  const totalDays = epochDurationDays * totalEpochs;
+  const totalDurationMs = totalDays * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  const elapsedMs = Math.max(0, now - startTimestamp);
+  const elapsedDays = elapsedMs / (24 * 60 * 60 * 1000);
+
+  // Cap at 100% if past end date
+  const progress = Math.min(100, (elapsedMs / totalDurationMs) * 100);
+  const currentDay = Math.min(totalDays, Math.floor(elapsedDays) + 1);
+  const currentEpoch = Math.min(totalEpochs, Math.floor(elapsedDays / epochDurationDays) + 1);
+  const daysRemaining = Math.max(0, Math.ceil(totalDays - elapsedDays));
+
+  return {
+    progress,
+    currentDay,
+    totalDays,
+    currentEpoch,
+    totalEpochs,
+    daysRemaining,
+  };
+};
 
 // Format large numbers compactly (e.g., 5,550,000 -> 5.55M)
 const formatCompactNumber = (num: number, decimals = 2): string => {
@@ -37,6 +71,7 @@ const formatCompactNumber = (num: number, decimals = 2): string => {
 export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   const { push } = useRouter();
   const { address } = useAccount();
+  const publicClient = usePublicClient({ chainId: 1 }); // Mainnet for Uniswap FXN price
   const { setChainId, setSelectedAsset, price } = useChainContext();
   const accountContext = useAccountContext();
   const { poolsByAssetAndChain, amountPoolAsset, hideEmptyPools, toggleHideEmptyPools, poolAccountsByChainScope } =
@@ -250,6 +285,50 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   // Preview personal activity (first 6 for display)
   const localPreviewPersonalActivity = useMemo(() => localPersonalActivity.slice(0, 6), [localPersonalActivity]);
 
+  // Calculate incentives timeline for fxUSD pool
+  const incentivesTimeline = useMemo(() => {
+    if (currentPoolInfo?.asset !== 'fxUSD') return null;
+    return calculateIncentivesTimeline();
+  }, [currentPoolInfo?.asset]);
+
+  // Fetch FXN price for incentives calculation from Uniswap V3
+  const { data: fxnPrice } = useQuery({
+    queryKey: ['fxn_price'],
+    queryFn: () => fetchFxnPrice(publicClient!),
+    enabled: currentPoolInfo?.asset === 'fxUSD' && !!publicClient,
+    staleTime: 300000, // 5 minutes
+    refetchInterval: 300000,
+  });
+
+  // Calculate user's earned FXN incentives
+  // Formula: (user_deposit / total_pool_deposits) * fxn_per_epoch * (elapsed_time / epoch_duration)
+  const userEarnedFxn = useMemo(() => {
+    if (!incentivesTimeline || !isLogged || acceptedFundsUsd === 0 || myFundsUsd === 0) {
+      return { amount: 0, usdValue: 0 };
+    }
+
+    const { fxnPerEpoch, epochDurationDays, totalEpochs, startTimestamp } = FXUSD_INCENTIVES_CONFIG;
+    const now = Date.now();
+    const elapsedMs = Math.max(0, now - startTimestamp);
+    const elapsedDays = elapsedMs / (24 * 60 * 60 * 1000);
+    const totalDays = epochDurationDays * totalEpochs;
+
+    // Cap elapsed days at total program duration
+    const cappedElapsedDays = Math.min(elapsedDays, totalDays);
+
+    // User's share of rewards = (user_deposit / total_deposits) * total_fxn * (elapsed / total_duration)
+    const userShare = myFundsUsd / acceptedFundsUsd;
+    const totalFxn = fxnPerEpoch * totalEpochs; // 225 FXN total
+    const earnedFxn = userShare * totalFxn * (cappedElapsedDays / totalDays);
+
+    const usdValue = earnedFxn * (fxnPrice || 0);
+
+    return {
+      amount: earnedFxn,
+      usdValue,
+    };
+  }, [incentivesTimeline, isLogged, acceptedFundsUsd, myFundsUsd, fxnPrice]);
+
   useEffect(() => {
     // Parse and set the chain ID
     const parsedChainId = parseInt(chainId, 10);
@@ -382,6 +461,71 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
             </StatsColumn>
           </Grid>
         </StatsContainer>
+
+        {/* Incentives Section - Only for fxUSD */}
+        {currentPoolInfo?.asset === 'fxUSD' && (
+          <IncentivesSection>
+            <IncentivesRow>
+              {/* Left Block - Incentives Amount */}
+              <IncentivesBlock>
+                <IncentivesLabel>Incentives</IncentivesLabel>
+                <IncentivesValueRow>
+                  <IncentivesValue>
+                    {userEarnedFxn.amount > 0 ? userEarnedFxn.amount.toFixed(2) : '0'} FXN
+                  </IncentivesValue>
+                  <ClaimButton disabled>Click to Claim</ClaimButton>
+                </IncentivesValueRow>
+                <IncentivesSubtext>
+                  ${userEarnedFxn.usdValue > 0 ? userEarnedFxn.usdValue.toFixed(2) : '0.00'}
+                </IncentivesSubtext>
+              </IncentivesBlock>
+
+              <IncentivesDivider />
+
+              {/* Right Block - Timeline */}
+              <IncentivesBlock>
+                <TimelineHeader>
+                  <TimelineLabel>Incentives Timeline</TimelineLabel>
+                  <InfoTooltip message='Timeline for incentive distribution epochs' iconWidth={12} iconHeight={12} />
+                  <TimelineDays>
+                    Day {incentivesTimeline?.currentDay}/{incentivesTimeline?.totalDays}
+                  </TimelineDays>
+                </TimelineHeader>
+                <TimelineContent>
+                  <EpochProgressBar progress={incentivesTimeline?.progress ?? 0} epochs={3} />
+                  <TimelineFooter>
+                    <TimelineProgress>
+                      <BoldText>{Math.round(incentivesTimeline?.progress ?? 0)}% complete</BoldText>
+                      {` • Epoch ${incentivesTimeline?.currentEpoch} of ${incentivesTimeline?.totalEpochs}`}
+                    </TimelineProgress>
+                    <TimelineRemaining>{incentivesTimeline?.daysRemaining} days to go</TimelineRemaining>
+                  </TimelineFooter>
+                </TimelineContent>
+              </IncentivesBlock>
+            </IncentivesRow>
+
+            <IncentivesBanner>
+              <InfoIcon>
+                <svg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'>
+                  <path
+                    d='M8 1C4.13438 1 1 4.13438 1 8C1 11.8656 4.13438 15 8 15C11.8656 15 15 11.8656 15 8C15 4.13438 11.8656 1 8 1ZM8 14C4.6875 14 2 11.3125 2 8C2 4.6875 4.6875 2 8 2C11.3125 2 14 4.6875 14 8C14 11.3125 11.3125 14 8 14Z'
+                    fill='black'
+                  />
+                  <path
+                    d='M7.25 5.25C7.25 5.44891 7.32902 5.63968 7.46967 5.78033C7.61032 5.92098 7.80109 6 8 6C8.19891 6 8.38968 5.92098 8.53033 5.78033C8.67098 5.63968 8.75 5.44891 8.75 5.25C8.75 5.05109 8.67098 4.86032 8.53033 4.71967C8.38968 4.57902 8.19891 4.5 8 4.5C7.80109 4.5 7.61032 4.57902 7.46967 4.71967C7.32902 4.86032 7.25 5.05109 7.25 5.25ZM8.375 7H7.625C7.55625 7 7.5 7.05625 7.5 7.125V11.375C7.5 11.4438 7.55625 11.5 7.625 11.5H8.375C8.44375 11.5 8.5 11.4438 8.5 11.375V7.125C8.5 7.05625 8.44375 7 8.375 7Z'
+                    fill='black'
+                  />
+                </svg>
+              </InfoIcon>
+              <IncentivesBannerText>
+                <BoldText>75 FXN ($2,500)</BoldText>
+                {' distributed pro-rata by deposit volume among '}
+                <BoldText>eligible depositor addresses</BoldText>
+                {' into the fxUSD pool.'}
+              </IncentivesBannerText>
+            </IncentivesBanner>
+          </IncentivesSection>
+        )}
 
         {/* Pool Accounts Table */}
         {isLogged && (
@@ -649,6 +793,43 @@ const PoolAssetSelect = ({ chainId, poolId }: { chainId: number; poolId: string 
         anchorEl={anchorEl}
       />
     </PoolSelectorContainer>
+  );
+};
+
+// Progress bar component that calculates fill for each epoch based on overall progress
+const EpochProgressBar = ({ progress, epochs }: { progress: number; epochs: number }) => {
+  const epochSize = 100 / epochs; // Size of each epoch as percentage
+
+  const getEpochFill = (epochIndex: number) => {
+    const epochStart = epochIndex * epochSize;
+    const epochEnd = (epochIndex + 1) * epochSize;
+
+    if (progress >= epochEnd) {
+      // Epoch is fully complete
+      return 100;
+    } else if (progress <= epochStart) {
+      // Epoch hasn't started
+      return 0;
+    } else {
+      // Epoch is partially complete
+      return ((progress - epochStart) / epochSize) * 100;
+    }
+  };
+
+  return (
+    <ProgressBar>
+      {Array.from({ length: epochs }, (_, i) => {
+        const fill = getEpochFill(i);
+        const isMiddle = i > 0 && i < epochs - 1;
+
+        return (
+          <ProgressEpoch key={i} isMiddle={isMiddle}>
+            {fill > 0 && <ProgressFilled style={{ width: `${fill}%` }} />}
+            {fill < 100 && <ProgressRemaining style={{ width: `${100 - fill}%` }} />}
+          </ProgressEpoch>
+        );
+      })}
+    </ProgressBar>
   );
 };
 
@@ -944,4 +1125,206 @@ export const ViewAllButton = styled(Button)(({ theme }) => ({
   '&:hover, &:focus': {
     color: theme.palette.grey[900],
   },
+}));
+
+// Incentives Section Styled Components
+const IncentivesSection = styled(Box)(({ theme }) => ({
+  width: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  borderTop: `1px solid ${theme.palette.grey[600]}`,
+  backgroundColor: theme.palette.background.paper,
+}));
+
+const IncentivesRow = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  width: '100%',
+  [theme.breakpoints.down('sm')]: {
+    flexDirection: 'column',
+  },
+}));
+
+const IncentivesBlock = styled(Box)(({ theme }) => ({
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  padding: '20px',
+  minHeight: '107px',
+  justifyContent: 'center',
+  [theme.breakpoints.down('sm')]: {
+    width: '100%',
+    '&:first-of-type': {
+      borderBottom: `1px solid ${theme.palette.grey[600]}`,
+    },
+  },
+}));
+
+const IncentivesDivider = styled(Box)(({ theme }) => ({
+  width: '1px',
+  height: '85px',
+  backgroundColor: theme.palette.grey[600],
+  [theme.breakpoints.down('sm')]: {
+    display: 'none',
+  },
+}));
+
+const IncentivesLabel = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#4D4D4D',
+}));
+
+const IncentivesValueRow = styled(Box)(() => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  width: '100%',
+}));
+
+const IncentivesValue = styled(Typography)(() => ({
+  fontWeight: 700,
+  fontSize: '24px',
+  lineHeight: 'normal',
+  color: '#000000',
+}));
+
+const ClaimButton = styled(Button)(({ theme }) => ({
+  backgroundColor: '#FFFFFF',
+  border: `1px solid ${theme.palette.grey[200]}`,
+  borderRadius: '4px',
+  padding: '4px 12px',
+  fontWeight: 500,
+  fontSize: '14px',
+  lineHeight: 'normal',
+  color: theme.palette.grey[200],
+  textTransform: 'none',
+  '&:hover': {
+    backgroundColor: '#FFFFFF',
+    border: `1px solid ${theme.palette.grey[400]}`,
+  },
+  '&:disabled': {
+    backgroundColor: '#FFFFFF',
+    border: `1px solid ${theme.palette.grey[200]}`,
+    color: theme.palette.grey[200],
+  },
+}));
+
+const IncentivesSubtext = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#4D4D4D',
+}));
+
+const TimelineHeader = styled(Box)(() => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  width: '100%',
+}));
+
+const TimelineLabel = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#4D4D4D',
+}));
+
+const TimelineDays = styled(Typography)(() => ({
+  flex: 1,
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#4D4D4D',
+  textAlign: 'right',
+}));
+
+const TimelineContent = styled(Box)(() => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px',
+  flex: 1,
+  justifyContent: 'center',
+  width: '100%',
+}));
+
+const ProgressBar = styled(Box)(() => ({
+  display: 'flex',
+  alignItems: 'center',
+  width: '100%',
+  height: '10px',
+}));
+
+const ProgressEpoch = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'isMiddle',
+})<{ isMiddle?: boolean }>(({ isMiddle }) => ({
+  flex: 1,
+  display: 'flex',
+  height: '10px',
+  marginLeft: isMiddle ? '1px' : 0,
+  marginRight: isMiddle ? '1px' : 0,
+}));
+
+const ProgressFilled = styled(Box)(() => ({
+  backgroundColor: '#7d9c40',
+  height: '10px',
+}));
+
+const ProgressRemaining = styled(Box)(() => ({
+  backgroundColor: '#e6e6e6',
+  height: '10px',
+}));
+
+const TimelineFooter = styled(Box)(() => ({
+  display: 'flex',
+  alignItems: 'flex-start',
+  justifyContent: 'space-between',
+  width: '100%',
+}));
+
+const TimelineProgress = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#4D4D4D',
+}));
+
+const TimelineRemaining = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#4D4D4D',
+}));
+
+const IncentivesBanner = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+  padding: '12px 20px',
+  backgroundColor: theme.palette.background.paper,
+  borderTop: `1px solid ${theme.palette.grey[600]}`,
+}));
+
+const InfoIcon = styled(Box)(() => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '16px',
+  height: '16px',
+  flexShrink: 0,
+}));
+
+const IncentivesBannerText = styled(Typography)(() => ({
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '16px',
+  color: '#000000',
+  flex: 1,
+}));
+
+const BoldText = styled('span')(() => ({
+  fontWeight: 600,
 }));
