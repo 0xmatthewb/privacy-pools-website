@@ -529,7 +529,11 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
               <IncentivesBlock>
                 <TimelineHeader>
                   <TimelineLabel>Incentives Timeline</TimelineLabel>
-                  <InfoTooltip message='Timeline for incentive distribution epochs' iconWidth={12} iconHeight={12} />
+                  <InfoTooltip
+                    message='Timeline for incentive distribution epochs. Rewards may roll over if TVL is below $200k.'
+                    iconWidth={12}
+                    iconHeight={12}
+                  />
                   <TimelineDays>
                     Day {incentivesTimeline?.currentDay}/{incentivesTimeline?.totalDays}
                   </TimelineDays>
@@ -561,10 +565,12 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
                 </svg>
               </InfoIcon>
               <IncentivesBannerText>
-                <BoldText>75 FXN ($2,500)</BoldText>
+                <BoldText>75 FXN</BoldText>
                 {' distributed pro-rata by deposit volume among '}
                 <BoldText>eligible depositor addresses</BoldText>
-                {' into the fxUSD pool.'}
+                {
+                  ' per epoch. Only the first deposit per address per epoch is eligible. Rewards roll over if TVL is below $200k.'
+                }
               </IncentivesBannerText>
             </IncentivesBanner>
           </IncentivesSection>

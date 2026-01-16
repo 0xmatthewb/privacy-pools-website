@@ -186,19 +186,29 @@ export const calculatePrivacyScore = (
 // Assets that have incentives and APR display
 const INCENTIVIZED_ASSETS = ['fxUSD'];
 
-// FXN incentives config: 75 FXN per month (per epoch)
-const FXN_PER_MONTH = 75;
+// FXN incentives configuration
+const FXUSD_INCENTIVES_CONFIG = {
+  fxnPerMonth: 75, // 75 FXN distributed per month (epoch)
+  tvlThresholdUsd: 200_000, // Below this TVL, rewards roll over
+};
+
+// APR calculation result with rollover info
+interface AprResult {
+  apr: number;
+  isRolloverActive: boolean;
+  monthlyBudgetUsd: number;
+}
 
 const PoolCard = ({
   pool,
   isLeftColumn,
   isFirstRow,
-  apr,
+  aprResult,
 }: {
   pool: PoolCardData;
   isLeftColumn: boolean;
   isFirstRow: boolean;
-  apr?: number;
+  aprResult?: AprResult;
 }) => {
   const router = useRouter();
 
@@ -246,11 +256,12 @@ const PoolCard = ({
           </Stack>
         </Stack>
         <Stack direction='row' alignItems='center' gap={1}>
-          {hasIncentives && apr !== undefined && apr > 0 && (
-            <APRTag>
-              <APRText>{apr.toFixed(0)}% APR</APRText>
+          {hasIncentives && aprResult && aprResult.apr > 0 && (
+            <APRTag isRollover={aprResult.isRolloverActive}>
+              <APRText>{aprResult.apr.toFixed(0)}% APR</APRText>
+              {aprResult.isRolloverActive && <RolloverBadge>Rollover</RolloverBadge>}
               <InfoTooltip
-                message='Estimated APR from FXN incentives based on current TVL'
+                message={`Estimated APR from FXN incentives. ${aprResult.isRolloverActive ? 'Rewards roll over when TVL is below $200k. ' : ''}Only the first deposit per address per epoch is eligible.`}
                 iconWidth={12}
                 iconHeight={12}
               />
@@ -328,7 +339,15 @@ const PoolCard = ({
   );
 };
 
-const FundsOnlyCard = ({ pool, hasBorderTop, apr }: { pool: PoolCardData; hasBorderTop?: boolean; apr?: number }) => {
+const FundsOnlyCard = ({
+  pool,
+  hasBorderTop,
+  aprResult,
+}: {
+  pool: PoolCardData;
+  hasBorderTop?: boolean;
+  aprResult?: AprResult;
+}) => {
   const router = useRouter();
   const hasIncentives = INCENTIVIZED_ASSETS.includes(pool.asset);
 
@@ -361,11 +380,12 @@ const FundsOnlyCard = ({ pool, hasBorderTop, apr }: { pool: PoolCardData; hasBor
             <ChainName variant='body1'>{pool.chainName}</ChainName>
           </Stack>
         </Stack>
-        {hasIncentives && apr !== undefined && apr > 0 && (
-          <APRTag>
-            <APRText>{apr.toFixed(0)}% APR</APRText>
+        {hasIncentives && aprResult && aprResult.apr > 0 && (
+          <APRTag isRollover={aprResult.isRolloverActive}>
+            <APRText>{aprResult.apr.toFixed(0)}% APR</APRText>
+            {aprResult.isRolloverActive && <RolloverBadge>Rollover</RolloverBadge>}
             <InfoTooltip
-              message='Estimated APR from FXN incentives based on current TVL'
+              message={`Estimated APR from FXN incentives. ${aprResult.isRolloverActive ? 'Rewards roll over when TVL is below $200k. ' : ''}Only the first deposit per address per epoch is eligible.`}
               iconWidth={12}
               iconHeight={12}
             />
@@ -560,16 +580,28 @@ export const AllPoolsStats = () => {
   }, [poolStatsMap]);
 
   // Calculate APR for incentivized pools
-  // APR = (monthly_incentive_usd * 12) / tvl_usd * 100
-  const calculateApr = (pool: PoolCardData): number | undefined => {
+  // APR = (monthly_incentive_usd * 12) / avg_tvl_usd
+  // If TVL < $200k threshold, rewards roll over to next epoch
+  const calculateApr = (pool: PoolCardData): AprResult | undefined => {
     if (!INCENTIVIZED_ASSETS.includes(pool.asset)) return undefined;
     if (!fxnPrice || fxnPrice === 0) return undefined;
+
+    // Use current TVL (TODO: replace with avg_tvl from API when available)
     const tvl = pool.totalFundsUSD ?? 0;
     if (tvl === 0) return undefined;
 
-    const monthlyIncentiveUsd = FXN_PER_MONTH * fxnPrice;
-    const apr = ((monthlyIncentiveUsd * 12) / tvl) * 100;
-    return apr;
+    const { fxnPerMonth, tvlThresholdUsd } = FXUSD_INCENTIVES_CONFIG;
+    const monthlyBudgetUsd = fxnPerMonth * fxnPrice;
+    const isRolloverActive = tvl < tvlThresholdUsd;
+
+    // APR calculation: (monthly_budget * 12) / tvl
+    const apr = ((monthlyBudgetUsd * 12) / tvl) * 100;
+
+    return {
+      apr,
+      isRolloverActive,
+      monthlyBudgetUsd,
+    };
   };
 
   // Filter and sort pools based on search query, chain filter, and sort option
@@ -775,7 +807,7 @@ export const AllPoolsStats = () => {
               return (
                 <React.Fragment key={`${pool.chainId}-${pool.scope}-${index}`}>
                   <Grid item xs={12} sm={6}>
-                    <FundsOnlyCard pool={pool} hasBorderTop={needsBorderTop} apr={calculateApr(pool)} />
+                    <FundsOnlyCard pool={pool} hasBorderTop={needsBorderTop} aprResult={calculateApr(pool)} />
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <GrowthOnlyCard pool={pool} hasBorderTop={needsBorderTop} />
@@ -786,7 +818,12 @@ export const AllPoolsStats = () => {
 
             return (
               <Grid item xs={12} sm={6} key={`${pool.chainId}-${pool.scope}-${index}`}>
-                <PoolCard pool={pool} isLeftColumn={index % 2 === 0} isFirstRow={index < 2} apr={calculateApr(pool)} />
+                <PoolCard
+                  pool={pool}
+                  isLeftColumn={index % 2 === 0}
+                  isFirstRow={index < 2}
+                  aprResult={calculateApr(pool)}
+                />
               </Grid>
             );
           })}
@@ -1091,15 +1128,27 @@ const PrivacyScoreBar = styled(Box)(() => ({
 //   zIndex: 1,
 // }));
 
-const APRTag = styled(Stack)(() => ({
+const APRTag = styled(Stack, {
+  shouldForwardProp: (prop) => prop !== 'isRollover',
+})<{ isRollover?: boolean }>(({ isRollover }) => ({
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'center',
   gap: '4px',
   height: '24px',
   padding: '4px 8px',
-  backgroundColor: '#dfecc6',
+  backgroundColor: isRollover ? '#fff3cd' : '#dfecc6',
   borderRadius: '12px',
+}));
+
+const RolloverBadge = styled('span')(() => ({
+  fontWeight: 500,
+  fontSize: '10px',
+  lineHeight: '100%',
+  color: '#856404',
+  backgroundColor: '#ffc107',
+  padding: '2px 4px',
+  borderRadius: '4px',
 }));
 
 const APRText = styled('span')(() => ({
