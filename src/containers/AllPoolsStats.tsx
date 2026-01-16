@@ -482,6 +482,15 @@ export const AllPoolsStats = () => {
   // Get ASP endpoints for test and non-test chains
   const { ASP_ENDPOINT_TEST, ASP_ENDPOINT_NON_TEST } = getConfig().env;
 
+  // Fetch incentives stats for fxUSD pool (uses avg TVL for APR calculation)
+  const { data: fxusdIncentivesStats } = useQuery({
+    queryKey: ['pool_incentives_stats', 'fxusd', ASP_ENDPOINT_NON_TEST],
+    queryFn: () => aspClient.fetchPoolIncentivesStats(ASP_ENDPOINT_NON_TEST, 1, 'fxusd', 7),
+    staleTime: 300000, // 5 minutes
+    refetchInterval: 300000,
+    retry: 2,
+  });
+
   // Fetch pools-stats from both ASP endpoints (test and non-test)
   const poolStatsQuery = useQueries({
     queries: [
@@ -579,22 +588,36 @@ export const AllPoolsStats = () => {
     return pools;
   }, [poolStatsMap]);
 
-  // Calculate APR for incentivized pools
+  // Calculate APR for incentivized pools using API data
   // APR = (monthly_incentive_usd * 12) / avg_tvl_usd
-  // If TVL < $200k threshold, rewards roll over to next epoch
+  // If avg TVL < $200k threshold, rewards roll over to next epoch
   const calculateApr = (pool: PoolCardData): AprResult | undefined => {
     if (!INCENTIVIZED_ASSETS.includes(pool.asset)) return undefined;
     if (!fxnPrice || fxnPrice === 0) return undefined;
 
-    // Use current TVL (TODO: replace with avg_tvl from API when available)
+    // Use API data for avgTvl and rollover status if available
+    if (fxusdIncentivesStats?.pool && pool.asset === 'fxUSD') {
+      const avgTvlUsd = parseFloat(fxusdIncentivesStats.pool.avgTvlUsd);
+      if (avgTvlUsd === 0) return undefined;
+
+      const { fxnPerMonth } = FXUSD_INCENTIVES_CONFIG;
+      const monthlyBudgetUsd = fxnPerMonth * fxnPrice;
+      const apr = ((monthlyBudgetUsd * 12) / avgTvlUsd) * 100;
+
+      return {
+        apr,
+        isRolloverActive: fxusdIncentivesStats.pool.isRolloverActive,
+        monthlyBudgetUsd,
+      };
+    }
+
+    // Fallback to current TVL if API data not available
     const tvl = pool.totalFundsUSD ?? 0;
     if (tvl === 0) return undefined;
 
     const { fxnPerMonth, tvlThresholdUsd } = FXUSD_INCENTIVES_CONFIG;
     const monthlyBudgetUsd = fxnPerMonth * fxnPrice;
     const isRolloverActive = tvl < tvlThresholdUsd;
-
-    // APR calculation: (monthly_budget * 12) / tvl
     const apr = ((monthlyBudgetUsd * 12) / tvl) * 100;
 
     return {
