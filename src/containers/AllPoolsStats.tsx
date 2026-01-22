@@ -16,13 +16,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { formatUnits } from 'viem';
+import { usePublicClient } from 'wagmi';
+import { ChainFilterSelect } from '~/components/ChainFilterSelect';
 import { InfoTooltip } from '~/components/InfoTooltip';
 import { allPoolsChainData, getConfig, PoolInfo } from '~/config';
 import { PAContainer, Section } from '~/containers';
+import { useChainContext } from '~/hooks';
 import type { PoolResponse } from '~/types';
-import { aspClient } from '~/utils';
+import { aspClient, fetchFxnPrice } from '~/utils';
 import type { PoolStats } from '~/utils/aspClient';
 
 export interface PoolCardData {
@@ -180,14 +183,32 @@ export const calculatePrivacyScore = (
   }
 };
 
+// Assets that have incentives and APR display
+const INCENTIVIZED_ASSETS = ['fxUSD'];
+
+// FXN incentives configuration
+const FXUSD_INCENTIVES_CONFIG = {
+  fxnPerMonth: 75, // 75 FXN distributed per month (epoch)
+  tvlThresholdUsd: 200_000, // Below this TVL, rewards roll over
+};
+
+// APR calculation result with rollover info
+interface AprResult {
+  apr: number;
+  isRolloverActive: boolean;
+  monthlyBudgetUsd: number;
+}
+
 const PoolCard = ({
   pool,
   isLeftColumn,
   isFirstRow,
+  aprResult,
 }: {
   pool: PoolCardData;
   isLeftColumn: boolean;
   isFirstRow: boolean;
+  aprResult?: AprResult;
 }) => {
   const router = useRouter();
 
@@ -203,6 +224,7 @@ const PoolCard = ({
 
   const hasGrowth = pool.growthPercentage !== undefined && pool.growthPercentage !== 0;
   const isPositiveGrowth = (pool.growthPercentage || 0) > 0;
+  const hasIncentives = INCENTIVIZED_ASSETS.includes(pool.asset);
 
   // HIDDEN: Privacy score calculations (commented out to hide privacy score)
   // const privacyScoreBar = calculatePrivacyScore(totalFundsUSD, pool.acceptedDepositsCount, pool.depositVarianceScore);
@@ -233,29 +255,42 @@ const PoolCard = ({
             <ChainName variant='body1'>{pool.chainName}</ChainName>
           </Stack>
         </Stack>
-        {hasGrowth && (
-          <GrowthIndicator positive={isPositiveGrowth}>
-            {isPositiveGrowth ? (
-              <svg width='16' height='17' viewBox='0 0 16 17' fill='none' xmlns='http://www.w3.org/2000/svg'>
-                <path
-                  d='M10 4.25V5.25H13.2929L9 9.54295L6.8535 7.3965C6.80709 7.35005 6.75199 7.3132 6.69133 7.28806C6.63067 7.26292 6.56566 7.24998 6.5 7.24998C6.43434 7.24998 6.36933 7.26292 6.30867 7.28806C6.24801 7.3132 6.19291 7.35005 6.1465 7.3965L1 12.5429L1.70705 13.25L6.5 8.45705L8.6465 10.6035C8.69291 10.6499 8.74801 10.6868 8.80867 10.7119C8.86932 10.7371 8.93434 10.75 9 10.75C9.06566 10.75 9.13068 10.7371 9.19133 10.7119C9.25199 10.6868 9.30709 10.6499 9.3535 10.6035L14 5.95705V9.25H15V4.25H10Z'
-                  fill='#7D9C40'
-                />
-              </svg>
-            ) : (
-              <svg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'>
-                <path
-                  d='M10 12V11H13.2929L9 6.70705L6.8535 8.8535C6.80709 8.89995 6.75199 8.9368 6.69133 8.96194C6.63067 8.98708 6.56566 9.00002 6.5 9.00002C6.43434 9.00002 6.36933 8.98708 6.30867 8.96194C6.24801 8.9368 6.19291 8.89995 6.1465 8.8535L1 3.70705L1.70705 3L6.5 7.79295L8.6465 5.6465C8.69291 5.60005 8.74801 5.5632 8.80867 5.53806C8.86932 5.51292 8.93434 5.49998 9 5.49998C9.06566 5.49998 9.13068 5.51292 9.19133 5.53806C9.25199 5.5632 9.30709 5.60005 9.3535 5.6465L14 10.293L14 7H15L15 12H10Z'
-                  fill='#BA6B5D'
-                />
-              </svg>
-            )}
-            <GrowthPercentage positive={isPositiveGrowth}>
-              {Math.abs(pool.growthPercentage || 0).toFixed(1)}%
-            </GrowthPercentage>
-            <GrowthTimeframe>past 24h</GrowthTimeframe>
-          </GrowthIndicator>
-        )}
+        <Stack direction='row' alignItems='center' gap={1}>
+          {hasIncentives && aprResult && aprResult.apr > 0 && (
+            <APRTag isRollover={aprResult.isRolloverActive}>
+              <APRText>{aprResult.apr.toFixed(0)}% APR</APRText>
+              {aprResult.isRolloverActive && <RolloverBadge>Rollover</RolloverBadge>}
+              <InfoTooltip
+                message={`Estimated APR from FXN incentives. ${aprResult.isRolloverActive ? 'Rewards roll over when TVL is below $200k. ' : ''}Only the first deposit per address per epoch is eligible.`}
+                iconWidth={12}
+                iconHeight={12}
+              />
+            </APRTag>
+          )}
+          {hasGrowth && (
+            <GrowthIndicator positive={isPositiveGrowth}>
+              {isPositiveGrowth ? (
+                <svg width='16' height='17' viewBox='0 0 16 17' fill='none' xmlns='http://www.w3.org/2000/svg'>
+                  <path
+                    d='M10 4.25V5.25H13.2929L9 9.54295L6.8535 7.3965C6.80709 7.35005 6.75199 7.3132 6.69133 7.28806C6.63067 7.26292 6.56566 7.24998 6.5 7.24998C6.43434 7.24998 6.36933 7.26292 6.30867 7.28806C6.24801 7.3132 6.19291 7.35005 6.1465 7.3965L1 12.5429L1.70705 13.25L6.5 8.45705L8.6465 10.6035C8.69291 10.6499 8.74801 10.6868 8.80867 10.7119C8.86932 10.7371 8.93434 10.75 9 10.75C9.06566 10.75 9.13068 10.7371 9.19133 10.7119C9.25199 10.6868 9.30709 10.6499 9.3535 10.6035L14 5.95705V9.25H15V4.25H10Z'
+                    fill='#7D9C40'
+                  />
+                </svg>
+              ) : (
+                <svg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'>
+                  <path
+                    d='M10 12V11H13.2929L9 6.70705L6.8535 8.8535C6.80709 8.89995 6.75199 8.9368 6.69133 8.96194C6.63067 8.98708 6.56566 9.00002 6.5 9.00002C6.43434 9.00002 6.36933 8.98708 6.30867 8.96194C6.24801 8.9368 6.19291 8.89995 6.1465 8.8535L1 3.70705L1.70705 3L6.5 7.79295L8.6465 5.6465C8.69291 5.60005 8.74801 5.5632 8.80867 5.53806C8.86932 5.51292 8.93434 5.49998 9 5.49998C9.06566 5.49998 9.13068 5.51292 9.19133 5.53806C9.25199 5.5632 9.30709 5.60005 9.3535 5.6465L14 10.293L14 7H15L15 12H10Z'
+                    fill='#BA6B5D'
+                  />
+                </svg>
+              )}
+              <GrowthPercentage positive={isPositiveGrowth}>
+                {Math.abs(pool.growthPercentage || 0).toFixed(1)}%
+              </GrowthPercentage>
+              <GrowthTimeframe>past 24h</GrowthTimeframe>
+            </GrowthIndicator>
+          )}
+        </Stack>
       </PoolHeader>
 
       <PoolStats>
@@ -274,6 +309,17 @@ const PoolCard = ({
           <TotalFundsValue>{totalFundsDisplay}</TotalFundsValue>
           <InfoTooltip message='Total funds in the pool' iconWidth={14} iconHeight={14} />
         </Stack>
+        {hasIncentives && (
+          <IncentivesIndicator>
+            <svg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'>
+              <path
+                d='M14 4H13V3C13 2.73478 12.8946 2.48043 12.7071 2.29289C12.5196 2.10536 12.2652 2 12 2H2C1.73478 2 1.48043 2.10536 1.29289 2.29289C1.10536 2.48043 1 2.73478 1 3V11C1 11.2652 1.10536 11.5196 1.29289 11.7071C1.48043 11.8946 1.73478 12 2 12H3V13C3 13.2652 3.10536 13.5196 3.29289 13.7071C3.48043 13.8946 3.73478 14 4 14H14C14.2652 14 14.5196 13.8946 14.7071 13.7071C14.8946 13.5196 15 13.2652 15 13V5C15 4.73478 14.8946 4.48043 14.7071 4.29289C14.5196 4.10536 14.2652 4 14 4ZM2 11V3H12V4H4C3.73478 4 3.48043 4.10536 3.29289 4.29289C3.10536 4.48043 3 4.73478 3 5V11H2ZM14 13H4V5H14V13ZM11 9C11 9.19778 10.9414 9.39112 10.8315 9.55557C10.7216 9.72002 10.5654 9.84819 10.3827 9.92388C10.2 9.99957 9.99889 10.0194 9.80491 9.98079C9.61093 9.9422 9.43275 9.84696 9.29289 9.70711C9.15304 9.56725 9.0578 9.38907 9.01922 9.19509C8.98063 9.00111 9.00043 8.80004 9.07612 8.61732C9.15181 8.43459 9.27998 8.27841 9.44443 8.16853C9.60888 8.05865 9.80222 8 10 8C10.2652 8 10.5196 8.10536 10.7071 8.29289C10.8946 8.48043 11 8.73478 11 9Z'
+                fill='#4D4D4D'
+              />
+            </svg>
+            <IncentivesText>Incentives</IncentivesText>
+          </IncentivesIndicator>
+        )}
         {/* HIDDEN: Privacy score bar */}
         {/* <PrivacyScoreBar>
           <PrivacyScoreSide width={62}>
@@ -293,8 +339,17 @@ const PoolCard = ({
   );
 };
 
-const FundsOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTop?: boolean }) => {
+const FundsOnlyCard = ({
+  pool,
+  hasBorderTop,
+  aprResult,
+}: {
+  pool: PoolCardData;
+  hasBorderTop?: boolean;
+  aprResult?: AprResult;
+}) => {
   const router = useRouter();
+  const hasIncentives = INCENTIVIZED_ASSETS.includes(pool.asset);
 
   const totalFundsUSD = pool.totalFundsUSD ?? 0;
   const totalFundsDisplay = new Intl.NumberFormat('en-US', {
@@ -325,6 +380,17 @@ const FundsOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTo
             <ChainName variant='body1'>{pool.chainName}</ChainName>
           </Stack>
         </Stack>
+        {hasIncentives && aprResult && aprResult.apr > 0 && (
+          <APRTag isRollover={aprResult.isRolloverActive}>
+            <APRText>{aprResult.apr.toFixed(0)}% APR</APRText>
+            {aprResult.isRolloverActive && <RolloverBadge>Rollover</RolloverBadge>}
+            <InfoTooltip
+              message={`Estimated APR from FXN incentives. ${aprResult.isRolloverActive ? 'Rewards roll over when TVL is below $200k. ' : ''}Only the first deposit per address per epoch is eligible.`}
+              iconWidth={12}
+              iconHeight={12}
+            />
+          </APRTag>
+        )}
       </PoolHeader>
 
       <PoolStats>
@@ -336,6 +402,17 @@ const FundsOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderTo
           <TotalFundsValue>{totalFundsDisplay}</TotalFundsValue>
           <InfoTooltip message='Total funds in the pool' iconWidth={14} iconHeight={14} />
         </Stack>
+        {hasIncentives && (
+          <IncentivesIndicator>
+            <svg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'>
+              <path
+                d='M14 4H13V3C13 2.73478 12.8946 2.48043 12.7071 2.29289C12.5196 2.10536 12.2652 2 12 2H2C1.73478 2 1.48043 2.10536 1.29289 2.29289C1.10536 2.48043 1 2.73478 1 3V11C1 11.2652 1.10536 11.5196 1.29289 11.7071C1.48043 11.8946 1.73478 12 2 12H3V13C3 13.2652 3.10536 13.5196 3.29289 13.7071C3.48043 13.8946 3.73478 14 4 14H14C14.2652 14 14.5196 13.8946 14.7071 13.7071C14.8946 13.5196 15 13.2652 15 13V5C15 4.73478 14.8946 4.48043 14.7071 4.29289C14.5196 4.10536 14.2652 4 14 4ZM2 11V3H12V4H4C3.73478 4 3.48043 4.10536 3.29289 4.29289C3.10536 4.48043 3 4.73478 3 5V11H2ZM14 13H4V5H14V13ZM11 9C11 9.19778 10.9414 9.39112 10.8315 9.55557C10.7216 9.72002 10.5654 9.84819 10.3827 9.92388C10.2 9.99957 9.99889 10.0194 9.80491 9.98079C9.61093 9.9422 9.43275 9.84696 9.29289 9.70711C9.15304 9.56725 9.0578 9.38907 9.01922 9.19509C8.98063 9.00111 9.00043 8.80004 9.07612 8.61732C9.15181 8.43459 9.27998 8.27841 9.44443 8.16853C9.60888 8.05865 9.80222 8 10 8C10.2652 8 10.5196 8.10536 10.7071 8.29289C10.8946 8.48043 11 8.73478 11 9Z'
+                fill='#4D4D4D'
+              />
+            </svg>
+            <IncentivesText>Incentives</IncentivesText>
+          </IncentivesIndicator>
+        )}
       </PoolStatsBottom>
     </SinglePoolCardContainer>
   );
@@ -387,12 +464,32 @@ const GrowthOnlyCard = ({ pool, hasBorderTop }: { pool: PoolCardData; hasBorderT
 type SortOption = 'most-popular' | 'most-private' | 'most-deposits' | 'most-uniform';
 
 export const AllPoolsStats = () => {
+  const { selectedChainIds, setSelectedChainIds, allPoolsChains } = useChainContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('most-popular');
   const [sortSelectOpen, setSortSelectOpen] = useState(false);
+  const publicClient = usePublicClient({ chainId: 1 }); // Mainnet for Uniswap FXN price
+
+  // Fetch FXN price for APR calculation
+  const { data: fxnPrice } = useQuery({
+    queryKey: ['fxn_price'],
+    queryFn: () => fetchFxnPrice(publicClient!),
+    enabled: !!publicClient,
+    staleTime: 300000, // 5 minutes
+    refetchInterval: 300000,
+  });
 
   // Get ASP endpoints for test and non-test chains
   const { ASP_ENDPOINT_TEST, ASP_ENDPOINT_NON_TEST } = getConfig().env;
+
+  // Fetch incentives stats for fxUSD pool (uses avg TVL for APR calculation)
+  const { data: fxusdIncentivesStats } = useQuery({
+    queryKey: ['pool_incentives_stats', 'fxusd', ASP_ENDPOINT_NON_TEST],
+    queryFn: () => aspClient.fetchPoolIncentivesStats(ASP_ENDPOINT_NON_TEST, 1, 'fxusd', 7),
+    staleTime: 300000, // 5 minutes
+    refetchInterval: 300000,
+    retry: 2,
+  });
 
   // Fetch pools-stats from both ASP endpoints (test and non-test)
   const poolStatsQuery = useQueries({
@@ -491,9 +588,53 @@ export const AllPoolsStats = () => {
     return pools;
   }, [poolStatsMap]);
 
-  // Filter and sort pools based on search query and sort option
+  // Calculate APR for incentivized pools using API data
+  // APR = (monthly_incentive_usd * 12) / avg_tvl_usd
+  // If avg TVL < $200k threshold, rewards roll over to next epoch
+  const calculateApr = (pool: PoolCardData): AprResult | undefined => {
+    if (!INCENTIVIZED_ASSETS.includes(pool.asset)) return undefined;
+    if (!fxnPrice || fxnPrice === 0) return undefined;
+
+    // Use API data for avgTvl and rollover status if available
+    if (fxusdIncentivesStats?.pool && pool.asset === 'fxUSD') {
+      const avgTvlUsd = parseFloat(fxusdIncentivesStats.pool.avgTvlUsd);
+      if (avgTvlUsd === 0) return undefined;
+
+      const { fxnPerMonth } = FXUSD_INCENTIVES_CONFIG;
+      const monthlyBudgetUsd = fxnPerMonth * fxnPrice;
+      const apr = ((monthlyBudgetUsd * 12) / avgTvlUsd) * 100;
+
+      return {
+        apr,
+        isRolloverActive: fxusdIncentivesStats.pool.isRolloverActive,
+        monthlyBudgetUsd,
+      };
+    }
+
+    // Fallback to current TVL if API data not available
+    const tvl = pool.totalFundsUSD ?? 0;
+    if (tvl === 0) return undefined;
+
+    const { fxnPerMonth, tvlThresholdUsd } = FXUSD_INCENTIVES_CONFIG;
+    const monthlyBudgetUsd = fxnPerMonth * fxnPrice;
+    const isRolloverActive = tvl < tvlThresholdUsd;
+    const apr = ((monthlyBudgetUsd * 12) / tvl) * 100;
+
+    return {
+      apr,
+      isRolloverActive,
+      monthlyBudgetUsd,
+    };
+  };
+
+  // Filter and sort pools based on search query, chain filter, and sort option
   const filteredPools = useMemo(() => {
     let pools = allPools;
+
+    // Filter by selected chains
+    if (selectedChainIds.length > 0) {
+      pools = pools.filter((pool) => selectedChainIds.includes(pool.chainId));
+    }
 
     // Filter by search query
     if (searchQuery.trim()) {
@@ -578,7 +719,7 @@ export const AllPoolsStats = () => {
     });
 
     return sortedPools;
-  }, [allPools, searchQuery, sortBy]);
+  }, [allPools, searchQuery, sortBy, selectedChainIds]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -592,13 +733,18 @@ export const AllPoolsStats = () => {
     <PAContainer>
       <Section width='100%'>
         <HeaderSection>
-          <Stack direction='row' alignItems='center' gap={1}>
+          <Stack direction='row' alignItems='center' gap={2}>
             <Typography variant='h6' fontWeight='bold'>
               All Pools
             </Typography>
             <Typography variant='caption' fontWeight='bold' color='text.secondary'>
               ({filteredPools.length})
             </Typography>
+            <ChainFilterSelect
+              chains={allPoolsChains}
+              selectedChainIds={selectedChainIds}
+              onChange={setSelectedChainIds}
+            />
           </Stack>
 
           <FilterRow>
@@ -684,7 +830,7 @@ export const AllPoolsStats = () => {
               return (
                 <React.Fragment key={`${pool.chainId}-${pool.scope}-${index}`}>
                   <Grid item xs={12} sm={6}>
-                    <FundsOnlyCard pool={pool} hasBorderTop={needsBorderTop} />
+                    <FundsOnlyCard pool={pool} hasBorderTop={needsBorderTop} aprResult={calculateApr(pool)} />
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <GrowthOnlyCard pool={pool} hasBorderTop={needsBorderTop} />
@@ -695,7 +841,12 @@ export const AllPoolsStats = () => {
 
             return (
               <Grid item xs={12} sm={6} key={`${pool.chainId}-${pool.scope}-${index}`}>
-                <PoolCard pool={pool} isLeftColumn={index % 2 === 0} isFirstRow={index < 2} />
+                <PoolCard
+                  pool={pool}
+                  isLeftColumn={index % 2 === 0}
+                  isFirstRow={index < 2}
+                  aprResult={calculateApr(pool)}
+                />
               </Grid>
             );
           })}
@@ -718,7 +869,6 @@ const HeaderSection = styled(Stack)(({ theme }) => ({
   justifyContent: 'space-between',
   alignItems: 'center',
   width: '100%',
-  marginBottom: theme.spacing(2),
   [theme.breakpoints.down('sm')]: {
     flexDirection: 'column',
     alignItems: 'flex-start',
@@ -1000,3 +1150,48 @@ const PrivacyScoreBar = styled(Box)(() => ({
 //   backgroundColor: '#4D4D4D',
 //   zIndex: 1,
 // }));
+
+const APRTag = styled(Stack, {
+  shouldForwardProp: (prop) => prop !== 'isRollover',
+})<{ isRollover?: boolean }>(({ isRollover }) => ({
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '4px',
+  height: '24px',
+  padding: '4px 8px',
+  backgroundColor: isRollover ? '#fff3cd' : '#dfecc6',
+  borderRadius: '12px',
+}));
+
+const RolloverBadge = styled('span')(() => ({
+  fontWeight: 500,
+  fontSize: '10px',
+  lineHeight: '100%',
+  color: '#856404',
+  backgroundColor: '#ffc107',
+  padding: '2px 4px',
+  borderRadius: '4px',
+}));
+
+const APRText = styled('span')(() => ({
+  fontWeight: 600,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#000000',
+}));
+
+const IncentivesIndicator = styled(Stack)(() => ({
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '4px',
+  height: '31px',
+}));
+
+const IncentivesText = styled('span')(() => ({
+  fontWeight: 400,
+  fontSize: '12px',
+  lineHeight: '100%',
+  color: '#4D4D4D',
+}));

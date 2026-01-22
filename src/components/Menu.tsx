@@ -1,7 +1,7 @@
 'use client';
 
 import { MouseEvent, useRef, useState } from 'react';
-import { Checkmark, Copy, Download, Logout, Menu as MenuIcon, Wallet } from '@carbon/icons-react';
+import { Checkmark, Copy, Download, Logout, Menu as MenuIcon, Wallet, Warning } from '@carbon/icons-react';
 import {
   ListItemIcon,
   Menu as MuiMenu,
@@ -16,7 +16,8 @@ import {
 import { captureException } from '@sentry/nextjs';
 import { formatUnits } from 'viem';
 import { useSignTypedData, useAccount, useEnsName, useEnsAvatar } from 'wagmi';
-import { useGoTo, useChainContext, useAuthContext, useAccountContext } from '~/hooks';
+import { useGoTo, useChainContext, useAuthContext, useAccountContext, useModal } from '~/hooks';
+import { ModalType } from '~/types';
 import {
   deriveMnemonicFromWalletSignature,
   buildSeedDerivationTypedData,
@@ -47,6 +48,7 @@ export const Menu = () => {
   } = useChainContext();
   const { logout } = useAuthContext();
   const { seed } = useAccountContext();
+  const { setModalOpen } = useModal();
   const { copied, copyToClipboard } = useClipboard({ timeout: 1400 });
   const [isDownloading, setIsDownloading] = useState(false);
   const { signTypedDataAsync } = useSignTypedData();
@@ -182,6 +184,18 @@ export const Menu = () => {
             {isDownloading ? 'Authenticating...' : 'Download Recovery Phrase'}
           </SMenuItem>
         )}
+
+        <SMenuItem
+          onClick={() => {
+            handleClose();
+            setModalOpen(ModalType.SELF_REPORT);
+          }}
+        >
+          <ListItemIcon>
+            <Warning size={16} />
+          </ListItemIcon>
+          Report Compromised Address
+        </SMenuItem>
 
         <SMenuItem onClick={handleLogout}>
           <ListItemIcon>

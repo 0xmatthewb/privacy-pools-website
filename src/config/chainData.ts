@@ -3,6 +3,7 @@ import { arbitrum, base, bsc, Chain, mainnet, optimism, optimismSepolia, sepolia
 import { getAspEndpointForChain, getEnv } from '~/config/env';
 import { sUSDSAbi } from '~/config/sUSDSAbi';
 import { woethAbi } from '~/config/woethAbi';
+import { yusndAbi } from '~/config/yusndAbi';
 import arbitrumIcon from '~/assets/icons/arbitrum.svg';
 // import baseIcon from '~/assets/icons/base.svg';
 // import bnbIcon from '~/assets/icons/bnb.svg';
@@ -47,6 +48,7 @@ export type ChainAssets =
   | 'WOETH'
   | 'BNB'
   | 'yUSND'
+  | 'USND'
   | 'fxUSD';
 
 export interface AlternativeTokenConfig {
@@ -491,6 +493,12 @@ const mainnetChainData: ChainData = {
         color: '#28A0F0',
         isStableAsset: true,
         isNativeToken: false,
+        priceConversion: {
+          type: 'wrapped',
+          underlyingAsset: 'USND',
+          conversionMethod: 'convertToAssets',
+          conversionAbi: yusndAbi,
+        },
       },
       {
         chainId: arbitrum.id,

@@ -4,6 +4,94 @@ import { getConfig, PoolInfo } from '~/config';
 const url = `https://api.g.alchemy.com/prices/v1/${getConfig().env.ALCHEMY_KEY}/tokens/by-symbol?`;
 const options = { method: 'GET', headers: { accept: 'application/json' } };
 
+// Fallback prices for stablecoins not supported by Alchemy API
+// These are USD-pegged stablecoins that should be ~$1
+const STABLECOIN_FALLBACK_PRICES: Record<string, number> = {
+  USND: 1.0, // Nerite USD - redeemable for $1 worth of collateral
+};
+
+// Uniswap V3 FXN/WETH pool on Ethereum mainnet
+const UNISWAP_V3_FXN_WETH_POOL = '0xfC71bAa1dF133727AE381d003d09E6339d0a7aCC';
+
+// Uniswap V3 Pool ABI (minimal for slot0)
+const UNISWAP_V3_POOL_ABI = [
+  {
+    inputs: [],
+    name: 'slot0',
+    outputs: [
+      { name: 'sqrtPriceX96', type: 'uint160' },
+      { name: 'tick', type: 'int24' },
+      { name: 'observationIndex', type: 'uint16' },
+      { name: 'observationCardinality', type: 'uint16' },
+      { name: 'observationCardinalityNext', type: 'uint16' },
+      { name: 'feeProtocol', type: 'uint8' },
+      { name: 'unlocked', type: 'bool' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'token0',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+/**
+ * Fetches FXN token price in USD by querying Uniswap V3 FXN/WETH pool
+ * and converting via ETH price
+ * @param publicClient Viem public client for Ethereum mainnet
+ * @returns FXN price in USD
+ */
+export const fetchFxnPrice = async (publicClient: PublicClient): Promise<number> => {
+  try {
+    // Get slot0 from Uniswap V3 pool to get current price
+    const [slot0Result, token0] = await Promise.all([
+      publicClient.readContract({
+        address: UNISWAP_V3_FXN_WETH_POOL as `0x${string}`,
+        abi: UNISWAP_V3_POOL_ABI,
+        functionName: 'slot0',
+      }),
+      publicClient.readContract({
+        address: UNISWAP_V3_FXN_WETH_POOL as `0x${string}`,
+        abi: UNISWAP_V3_POOL_ABI,
+        functionName: 'token0',
+      }),
+    ]);
+
+    const sqrtPriceX96 = slot0Result[0];
+
+    // Calculate price from sqrtPriceX96
+    // price = (sqrtPriceX96 / 2^96)^2
+    const Q96 = BigInt(2 ** 96);
+    const sqrtPrice = Number(sqrtPriceX96) / Number(Q96);
+    let price = sqrtPrice * sqrtPrice;
+
+    // FXN token address
+    const FXN_ADDRESS = '0x365AccFCa291e7D3914637ABf1F7635dB165Bb09'.toLowerCase();
+
+    // If token0 is FXN, price is FXN/WETH, otherwise invert
+    if (token0.toLowerCase() !== FXN_ADDRESS) {
+      price = 1 / price;
+    }
+
+    // Get ETH price in USD from Alchemy
+    const ethResponse = await fetch(`${url}symbols=ETH`, options);
+    const ethJson = await ethResponse.json();
+    const ethPriceUsd = ethJson.data?.[0]?.prices?.[0]?.value || 3000; // Fallback ETH price
+
+    // FXN price in USD = FXN/WETH * WETH/USD
+    const fxnPriceUsd = price * ethPriceUsd;
+
+    return fxnPriceUsd;
+  } catch (error) {
+    console.error('Error fetching FXN price from Uniswap:', error);
+    return 0;
+  }
+};
+
 /**
  * Fetches token price, with support for custom price conversions
  * @param tokenSymbol The token symbol to fetch price for
@@ -34,7 +122,12 @@ export const fetchTokenPrice = async (
       // Get the price of the underlying asset
       const underlyingResponse = await fetch(`${url}symbols=${underlyingAsset}`, options);
       const underlyingJson = await underlyingResponse.json();
-      const underlyingPrice = underlyingJson.data?.[0]?.prices?.[0]?.value;
+      let underlyingPrice = underlyingJson.data?.[0]?.prices?.[0]?.value;
+
+      // Use fallback price for stablecoins not supported by Alchemy
+      if (!underlyingPrice && STABLECOIN_FALLBACK_PRICES[underlyingAsset]) {
+        underlyingPrice = STABLECOIN_FALLBACK_PRICES[underlyingAsset];
+      }
 
       if (!underlyingPrice) {
         throw new Error(`Could not fetch price for underlying asset ${underlyingAsset}`);
