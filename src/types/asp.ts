@@ -98,3 +98,49 @@ export type MtLeavesResponse = {
 export type LeafIndexResponse = {
   index: number;
 };
+
+// Brevis ASP API response types
+export type BrevisAspLeavesResponse = {
+  err: unknown | null;
+  aspLeaves: string[]; // List of decimal-encoded strings
+};
+
+export type BrevisAspRootResponse = {
+  err: unknown | null;
+  aspMerkleTreeRoot: string; // Decimal-encoded string
+};
+
+// Extended response types that include Brevis data for BSC chain
+export type ExtendedMtLeavesResponse = MtLeavesResponse & {
+  brevisAspLeaves?: string[]; // ASP leaves from Brevis (for BSC chain)
+};
+
+export type ExtendedMtRootResponse = MtRootResponse & {
+  brevisAspMerkleTreeRoot?: string; // ASP root from Brevis (for BSC chain)
+};
+
+// Brevis all_deposits endpoint types
+export type BrevisAllDepositsRequest = {
+  page_size?: number; // Default: 20
+  page?: number; // Page number (1-indexed)
+  sort?: 0 | 1; // 0: ascending by block_number, 1: descending (default)
+  pool_address?: string[]; // Optional filter for specific pools
+};
+
+export type BrevisDepositInfo = {
+  label: string;
+  reviewStatus: string;
+  blockNumber?: string;
+  blockTime?: string;
+  poolAddress?: string;
+  amount?: string;
+  txHash?: string;
+};
+
+export type BrevisAllDepositsResponse = {
+  err: string | null;
+  depositInfo: BrevisDepositInfo[]; // Note: API returns 'depositInfo' not 'deposits'
+  total?: number;
+  page?: number;
+  page_size?: number;
+};

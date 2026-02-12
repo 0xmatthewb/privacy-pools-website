@@ -6,8 +6,8 @@ import { woethAbi } from '~/config/woethAbi';
 import { yusndAbi } from '~/config/yusndAbi';
 import arbitrumIcon from '~/assets/icons/arbitrum.svg';
 // import baseIcon from '~/assets/icons/base.svg';
-// import bnbIcon from '~/assets/icons/bnb.svg';
-// import bscIcon from '~/assets/icons/bsc.svg';
+import bnbIcon from '~/assets/icons/bnb.svg';
+import bscIcon from '~/assets/icons/bsc.svg';
 import daiIcon from '~/assets/icons/dai.svg';
 import frxusdIcon from '~/assets/icons/frxusd.svg';
 import fxusdIcon from '~/assets/icons/fxusd.svg';
@@ -49,7 +49,8 @@ export type ChainAssets =
   | 'BNB'
   | 'yUSND'
   | 'USND'
-  | 'fxUSD';
+  | 'fxUSD'
+  | 'BSCUSD';
 
 export interface AlternativeTokenConfig {
   tokenAddress: Address;
@@ -66,6 +67,13 @@ export interface PriceConversionConfig {
   underlyingAsset: ChainAssets; // The underlying asset to get price from
   conversionMethod: 'convertToAssets'; // Method to call for conversion
   conversionAbi: readonly unknown[]; // ABI for the conversion method
+}
+
+// External ASP configuration for pools that use third-party ASP providers
+export interface ExternalAspConfig {
+  provider: 'brevis'; // Add more providers as union types when needed (e.g., 'brevis' | 'acme' | 'foo')
+  baseUrl: string; // Base URL for the external ASP API
+  poolAddress: string; // Pool address used for filtering in the external ASP API
 }
 
 export interface PoolInfo {
@@ -92,6 +100,7 @@ export interface PoolInfo {
     name: string;
     url: string;
   }[]; // Pool-specific relayers that override chain defaults
+  externalAsp?: ExternalAspConfig; // External ASP configuration for third-party ASP providers
 }
 
 export interface ChainData {
@@ -421,36 +430,56 @@ const mainnetChainData: ChainData = {
   //     },
   //   ],
   // },
-  // // BSC
-  // [bsc.id]: {
-  //   name: bsc.name,
-  //   mobileName: 'BSC',
-  //   symbol: bsc.nativeCurrency.symbol,
-  //   decimals: bsc.nativeCurrency.decimals,
-  //   image: bscIcon.src,
-  //   explorerUrl: bsc.blockExplorers.default.url,
-  //   relayers: [{ name: 'Fast Relay', url: 'https://fastrelay.xyz' }],
-  //   sdkRpcUrl: `/api/hypersync-rpc?chainId=56`,
-  //   rpcUrl: `https://bnb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-  //   aspUrl: getAspEndpointForChain(mainnet.id), // Use mainnet ASP
-  //   poolInfo: [
-  //     {
-  //       chainId: bsc.id,
-  //       address: '0x4626A182030D9e98b13f690FFF3C443191a918ff',
-  //       assetAddress: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-  //       scope: 11123939809302748675379459504943549959694064271441044886820019404791514187711n,
-  //       deploymentBlock: 69568985n,
-  //       entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
-  //       maxDeposit: parseEther('10000'),
-  //       asset: 'BNB',
-  //       assetDecimals: 18,
-  //       icon: bnbIcon.src,
-  //       color: '#F0B90B',
-  //       isStableAsset: false,
-  //       isNativeToken: true,
-  //     },
-  //   ],
-  // },
+  // BSC
+  [bsc.id]: {
+    name: bsc.name,
+    mobileName: 'BSC',
+    symbol: bsc.nativeCurrency.symbol,
+    decimals: bsc.nativeCurrency.decimals,
+    image: bscIcon.src,
+    explorerUrl: bsc.blockExplorers.default.url,
+    relayers: [{ name: 'Fast Relay', url: 'https://fastrelay.xyz' }],
+    sdkRpcUrl: `/api/hypersync-rpc?chainId=56`,
+    rpcUrl: `https://bnb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+    aspUrl: getAspEndpointForChain(mainnet.id), // Use mainnet ASP
+    poolInfo: [
+      {
+        chainId: bsc.id,
+        address: '0x4626A182030D9e98b13f690FFF3C443191a918ff',
+        assetAddress: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+        scope: 11123939809302748675379459504943549959694064271441044886820019404791514187711n,
+        deploymentBlock: 69568985n,
+        entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
+        maxDeposit: parseEther('1650'),
+        asset: 'BNB',
+        assetDecimals: 18,
+        icon: bnbIcon.src,
+        color: '#F0B90B',
+        isStableAsset: false,
+        isNativeToken: true,
+      },
+      {
+        chainId: bsc.id,
+        address: '0x2ad9802Dc8b9b4022aDED1C6c8A7261970D84855',
+        assetAddress: '0x55d398326f99059fF775485246999027B3197955',
+        scope: 17156790482061047661687641619709167670419806298440661420675748742820932674245n,
+        deploymentBlock: 76430320n,
+        entryPointAddress: '0x44192215FEd782896BE2CE24E0Bfbf0BF825d15E',
+        maxDeposit: parseEther('200'),
+        asset: 'BSCUSD',
+        assetDecimals: 18,
+        icon: usdtIcon.src,
+        color: '#F0B90B',
+        isStableAsset: true,
+        isNativeToken: false,
+        externalAsp: {
+          provider: 'brevis',
+          baseUrl: 'https://brevis-asp-endpoint.brevis.network/v1/asp',
+          poolAddress: '0x2ad9802Dc8b9b4022aDED1C6c8A7261970D84855',
+        },
+      },
+    ],
+  },
   // Arbitrum
   [arbitrum.id]: {
     name: arbitrum.name,
