@@ -6,7 +6,14 @@ import { getEnv } from '~/config/env';
 import { useChainContext, useExternalServices, useNotifications, usePoolAccountsContext } from '~/hooks';
 import { useAccountManager } from '~/hooks/useAccountManager';
 import { AccountService, DepositsByLabelResponse, EventType, PoolAccount, ReviewStatus, HistoryData } from '~/types';
-import { addPoolAccount, addWithdrawal, getPoolAccountsFromAccount, addRagequit, aspClient } from '~/utils';
+import {
+  addPoolAccount,
+  addWithdrawal,
+  getPoolAccountsFromAccount,
+  addRagequit,
+  aspClient,
+  mergeAndSortAspLeaves,
+} from '~/utils';
 
 const { TEST_MODE } = getEnv();
 
@@ -107,13 +114,63 @@ export const AccountProvider = ({ children }: Props) => {
     return poolAccountsByChainScope[`${selectedPoolInfo.chainId}-${selectedPoolInfo.scope}`];
   }, [poolAccountsByChainScope, selectedPoolInfo.chainId, selectedPoolInfo.scope]);
 
+  const fetchChain56ReviewStatuses = useCallback(async (labels: string[]): Promise<Record<string, ReviewStatus>> => {
+    const reviewStatuses: Record<string, ReviewStatus> = {};
+
+    if (labels.length === 0) return reviewStatuses;
+
+    try {
+      // Fetch review statuses for all labels in a single batch request
+      const response = await aspClient.fetchBrevisDepositReviewStatus(labels);
+
+      if (response.err === null && response.depositStatus) {
+        // Map each deposit status to our internal ReviewStatus enum
+        for (const deposit of response.depositStatus) {
+          if (deposit.reviewStatus != null && deposit.label != null) {
+            const status = deposit.reviewStatus.toUpperCase() as keyof typeof ReviewStatus;
+            if (status in ReviewStatus) {
+              reviewStatuses[deposit.label] = ReviewStatus[status];
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching review statuses from Brevis endpoint:`, error);
+      // Return empty object on error - deposits will use internal ASP status
+    }
+
+    return reviewStatuses;
+  }, []);
+
   // Updates the review status and timestamp of deposit entries in pool accounts based on deposit data from ASP
   const processDeposits = useCallback(
-    (_depositData: DepositsByLabelResponse, onFinish: () => void) => {
+    async (_depositData: DepositsByLabelResponse, onFinish: () => void, chainId: string) => {
       if (!_depositData) throw Error('Deposits data not found');
       if (!mtLeavesData?.aspLeaves) throw Error('ASP leaves not found');
 
-      const scopeKey = `${selectedPoolInfo.chainId}-${selectedPoolInfo.scope}`;
+      const scopeKey = `${chainId}-${selectedPoolInfo.scope}`;
+      const chainIdNum = parseInt(chainId, 10);
+
+      // Fetch Brevis review statuses and leaves for chain 56
+      let chain56ReviewStatuses: Record<string, ReviewStatus> = {};
+      let brevisLeaves: string[] | undefined;
+      if (chainId === '56') {
+        const labels = _depositData.map((d) => d.label);
+        chain56ReviewStatuses = await fetchChain56ReviewStatuses(labels);
+
+        // Fetch Brevis ASP leaves directly for chain 56
+        const poolInfo = chainData[chainIdNum]?.poolInfo.find(
+          (p) => p.scope.toString() === selectedPoolInfo.scope.toString(),
+        );
+        if (poolInfo?.externalAsp?.provider === 'brevis') {
+          try {
+            const brevisLeavesResponse = await aspClient.fetchBrevisAspLeaves(poolInfo.externalAsp.baseUrl);
+            brevisLeaves = brevisLeavesResponse.aspLeaves;
+          } catch (err) {
+            console.error('Error fetching Brevis ASP leaves:', err);
+          }
+        }
+      }
 
       // Update poolAccountsByChainScope by processing the accounts for the current scope
       setPoolAccountsByChainScope((prev) => {
@@ -136,15 +193,23 @@ export const AccountProvider = ({ children }: Props) => {
             };
           }
 
-          const aspLeaf = mtLeavesData.aspLeaves.find((leaf) => leaf.toString() === entry.label.toString());
+          // For chain 56 (BSC), merge ASP leaves from both 0xBow and Brevis sources, sorted ASC
+          // For other chains, use standard ASP leaves
+          const leavesToCheck =
+            chainId === '56' ? mergeAndSortAspLeaves(mtLeavesData.aspLeaves, brevisLeaves) : mtLeavesData.aspLeaves;
+          const aspLeaf = leavesToCheck?.find((leaf) => leaf.toString() === entry.label.toString());
           let reviewStatus = deposit.reviewStatus;
 
+          if (chainId === '56' && chain56ReviewStatuses[entry.label.toString()]) {
+            reviewStatus = chain56ReviewStatuses[entry.label.toString()];
+          }
+
           // The deposit is approved but the leaves are not yet updated
-          if (deposit.reviewStatus === ReviewStatus.APPROVED && !aspLeaf) {
+          if (reviewStatus === ReviewStatus.APPROVED && !aspLeaf) {
             reviewStatus = ReviewStatus.PENDING;
           }
 
-          const isWithdrawn = entry.balance === BigInt(0) && deposit.reviewStatus === ReviewStatus.APPROVED;
+          const isWithdrawn = entry.balance === BigInt(0) && reviewStatus === ReviewStatus.APPROVED;
 
           return {
             ...entry,
@@ -162,14 +227,14 @@ export const AccountProvider = ({ children }: Props) => {
         }
 
         // Also update the poolAccounts state for the current view
-        setPoolAccounts(updatedAccountsForScope.filter((pa) => pa.chainId === selectedPoolInfo.chainId));
+        setPoolAccounts(updatedAccountsForScope.filter((pa) => pa.chainId === chainIdNum));
 
         return newPoolAccountsByChainScope;
       });
 
       onFinish();
     },
-    [mtLeavesData, selectedPoolInfo],
+    [mtLeavesData, selectedPoolInfo, fetchChain56ReviewStatuses],
   );
 
   // This is executed before updatePoolAccounts updates the state
@@ -186,12 +251,14 @@ export const AccountProvider = ({ children }: Props) => {
         return;
       }
 
+      // Extract chainId from the scope key
+      const chainId = scopeKey.split('-')[0];
       const labels = accountsForScope.map((entry) => entry.label.toString());
 
       fetchDepositsByLabel(labels)
         .then((deposits) => {
           if (deposits.length) {
-            processDeposits(deposits, () => setIsLoading(false));
+            processDeposits(deposits, () => setIsLoading(false), chainId);
           } else {
             setIsLoading(false);
           }
@@ -227,11 +294,13 @@ export const AccountProvider = ({ children }: Props) => {
 
           // Parse chainId and scope from the key (format: "chainId-scope")
           const [chainIdStr, ...scopeParts] = scopeKey.split('-');
-          const chainId = parseInt(chainIdStr, 10);
           const scope = scopeParts.join('-'); // Rejoin in case scope contains dashes
 
+          // TODO: Update chainData and aspClient to support string chainIds for Starknet in V2
+          const chainIdNum = parseInt(chainIdStr, 10);
+
           // Get the ASP URL for this chain
-          const chainInfo = chainData[chainId];
+          const chainInfo = chainData[chainIdNum];
           if (!chainInfo) {
             continue;
           }
@@ -239,20 +308,49 @@ export const AccountProvider = ({ children }: Props) => {
           const labels = accountsForScope.map((a) => a.label.toString());
 
           try {
-            // Fetch both deposits and MT leaves for this scope
+            // Fetch deposits and MT leaves for this scope
             const [deposits, mtLeavesResponse] = await Promise.all([
-              aspClient.fetchDepositsByLabel(chainInfo.aspUrl, chainId, scope, labels),
-              aspClient.fetchMtLeaves(chainInfo.aspUrl, chainId, scope),
+              aspClient.fetchDepositsByLabel(chainInfo.aspUrl, chainIdNum, scope, labels),
+              aspClient.fetchMtLeaves(chainInfo.aspUrl, chainIdNum, scope),
             ]);
             allDeposits.push(...deposits);
-            // Store the ASP leaves for this scope
-            mtLeavesByScope[scopeKey] = mtLeavesResponse.aspLeaves || [];
+
+            // For chain 56 (BSC), merge ASP leaves from both 0xBow and Brevis sources, sorted ASC
+            const poolInfo = chainInfo.poolInfo.find((p) => p.scope.toString() === scope);
+            if (chainIdNum === 56 && poolInfo?.externalAsp?.provider === 'brevis') {
+              try {
+                const brevisLeavesResponse = await aspClient.fetchBrevisAspLeaves(poolInfo.externalAsp.baseUrl);
+                // Merge leaves from both sources and sort ASC for consistent Merkle root
+                mtLeavesByScope[scopeKey] =
+                  mergeAndSortAspLeaves(mtLeavesResponse.aspLeaves, brevisLeavesResponse.aspLeaves) || [];
+              } catch (brevisErr) {
+                console.error(`Error fetching Brevis ASP leaves for scope ${scopeKey}:`, brevisErr);
+                // Fallback to standard ASP leaves only
+                mtLeavesByScope[scopeKey] = mtLeavesResponse.aspLeaves || [];
+              }
+            } else {
+              // Store the standard ASP leaves for this scope
+              mtLeavesByScope[scopeKey] = mtLeavesResponse.aspLeaves || [];
+            }
           } catch (err) {
             console.error(`Error fetching deposits for scope ${scopeKey}:`, err);
           }
         }
 
         if (allDeposits.length > 0) {
+          const chain56ReviewStatuses: Record<string, ReviewStatus> = {};
+          for (const scopeKey of allScopeKeys) {
+            const chainId = scopeKey.split('-')[0];
+            if (chainId === '56') {
+              const accountsForScope = poolAccountsByChainScopeToProcess[scopeKey];
+              if (accountsForScope && accountsForScope.length > 0) {
+                const labels = accountsForScope.map((a) => a.label.toString());
+                const statuses = await fetchChain56ReviewStatuses(labels);
+                Object.assign(chain56ReviewStatuses, statuses);
+              }
+            }
+          }
+
           // Process each scope with its deposits
           for (const scopeKey of allScopeKeys) {
             const accountsForScope = poolAccountsByChainScopeToProcess[scopeKey];
@@ -260,8 +358,10 @@ export const AccountProvider = ({ children }: Props) => {
 
             const scopeLabels = accountsForScope.map((a) => a.label.toString());
             const scopeDeposits = allDeposits.filter((d) => scopeLabels.includes(d.label));
-            // Get the MT leaves for THIS specific scope (not the currently selected chain)
+            // Get the MT leaves for THIS specific scope (not the globally selected chain)
             const scopeAspLeaves = mtLeavesByScope[scopeKey] || [];
+            // Extract chainId for this scope
+            const chainId = scopeKey.split('-')[0];
 
             if (scopeDeposits.length > 0) {
               // Update the scope in poolAccountsByChainScope
@@ -286,6 +386,10 @@ export const AccountProvider = ({ children }: Props) => {
                   // Use the MT leaves for THIS scope, not the globally selected chain
                   const aspLeaf = scopeAspLeaves.find((leaf) => leaf.toString() === entry.label.toString());
                   let reviewStatus = deposit.reviewStatus;
+
+                  if (chainId === '56' && chain56ReviewStatuses[entry.label.toString()]) {
+                    reviewStatus = chain56ReviewStatuses[entry.label.toString()];
+                  }
 
                   // The deposit is approved but the leaves are not yet updated
                   if (deposit.reviewStatus === ReviewStatus.APPROVED && !aspLeaf) {
@@ -320,7 +424,7 @@ export const AccountProvider = ({ children }: Props) => {
         setHasProcessedInitialDeposits(true);
       }
     },
-    [],
+    [fetchChain56ReviewStatuses],
   );
 
   const handleLoadAccount = useCallback(

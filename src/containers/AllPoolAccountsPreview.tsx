@@ -33,7 +33,7 @@ const PoolPreviewSection = ({
   onNavigateToViewAll,
 }: PoolPreviewSectionProps) => {
   const chain = chainData[chainId];
-  const { isLoading, isError } = useASP(chainId, poolInfo.scope.toString(), aspUrl);
+  const { isLoading, isError } = useASP(chainId, poolInfo.scope.toString(), aspUrl, poolInfo.externalAsp);
 
   // Calculate totals for this pool (poolAccounts are already filtered)
   const amountPoolAsset = useMemo(() => {

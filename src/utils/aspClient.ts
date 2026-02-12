@@ -6,6 +6,10 @@ import {
   DepositsByLabelResponse,
   AllEventsResponse,
   GlobalEventsResponse,
+  BrevisAspLeavesResponse,
+  BrevisAspRootResponse,
+  BrevisAllDepositsRequest,
+  BrevisAllDepositsResponse,
 } from '~/types';
 
 // Define type for pool stats response
@@ -111,6 +115,19 @@ const fetchWithHeaders = async <T>(url: string, headers?: Record<string, string>
   return response.json();
 };
 
+const postWithBody = async <T>(url: string, body: unknown): Promise<T> => {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error(`Request failed: ${response.statusText}`);
+  return response.json();
+};
+
 const aspClient = {
   fetchPoolInfo: (aspUrl: string, chainId: number, scope: string) =>
     fetchWithHeaders<PoolResponse>(`${aspUrl}/${chainId}/public/pool-info`, {
@@ -164,6 +181,23 @@ const aspClient = {
         'X-Pool-Scope': scope,
       },
     ),
+
+  // Brevis ASP endpoints
+  fetchBrevisAspLeaves: (brevisAspUrl: string) => fetchWithHeaders<BrevisAspLeavesResponse>(`${brevisAspUrl}/leaves`),
+
+  fetchBrevisAspRoot: (brevisAspUrl: string) => fetchWithHeaders<BrevisAspRootResponse>(`${brevisAspUrl}/root`),
+
+  fetchBrevisDepositReviewStatus: (labels: string[]) => {
+    const queryParams = labels.map((label) => `label=${encodeURIComponent(label)}`).join('&');
+    return fetchWithHeaders<{
+      err: string | null;
+      depositStatus: Array<{ label: string; reviewStatus: string }>;
+    }>(`https://brevis-asp-endpoint.brevis.network/v1/asp/deposits_by_label?${queryParams}`);
+  },
+
+  // Fetch all deposits from Brevis ASP with pagination and optional pool filtering
+  fetchBrevisAllDeposits: (baseUrl: string, request: BrevisAllDepositsRequest) =>
+    postWithBody<BrevisAllDepositsResponse>(`${baseUrl}/all_deposits`, request),
 };
 
 export { aspClient };
