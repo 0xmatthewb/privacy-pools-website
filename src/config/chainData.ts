@@ -7,6 +7,7 @@ import { yusndAbi } from '~/config/yusndAbi';
 import arbitrumIcon from '~/assets/icons/arbitrum.svg';
 // import baseIcon from '~/assets/icons/base.svg';
 import bnbIcon from '~/assets/icons/bnb.svg';
+import boldIcon from '~/assets/icons/bold.svg';
 import bscIcon from '~/assets/icons/bsc.svg';
 import daiIcon from '~/assets/icons/dai.svg';
 import frxusdIcon from '~/assets/icons/frxusd.svg';
@@ -50,7 +51,8 @@ export type ChainAssets =
   | 'yUSND'
   | 'USND'
   | 'fxUSD'
-  | 'BSCUSD';
+  | 'BSCUSD'
+  | 'BOLD';
 
 export interface AlternativeTokenConfig {
   tokenAddress: Address;
@@ -354,6 +356,21 @@ const mainnetChainData: ChainData = {
           { name: 'Fast Relay', url: 'https://relayer-staging-github-deployed-149184580131.us-east1.run.app' },
         ],
       },
+      {
+        chainId: mainnet.id,
+        address: '0xb4b5Fd38Fd4788071d7287e3cB52948e0d10b23E',
+        assetAddress: '0x6440f144b7e50D6a8439336510312d2F54beB01D',
+        scope: 12594345321156708920712766274402096360984745412708601457862140420990105325804n,
+        deploymentBlock: 24433029n,
+        entryPointAddress: '0x6818809EefCe719E480a7526D76bD3e561526b46',
+        maxDeposit: parseUnits('1000000', 18),
+        asset: 'BOLD',
+        assetDecimals: 18,
+        icon: boldIcon.src,
+        color: '#63D77D',
+        isStableAsset: true,
+        isNativeToken: false,
+      },
     ],
   },
   // Optimism
@@ -488,7 +505,7 @@ const mainnetChainData: ChainData = {
     decimals: arbitrum.nativeCurrency.decimals,
     image: arbitrumIcon.src,
     explorerUrl: arbitrum.blockExplorers.default.url,
-    relayers: [{ name: 'Fast Relay', url: 'https://relayer-staging-github-deployed-149184580131.us-east1.run.app' }],
+    relayers: [{ name: 'Fast Relay', url: 'https://fastrelay.xyz' }],
     sdkRpcUrl: `/api/hypersync-rpc?chainId=42161`,
     rpcUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
     aspUrl: getAspEndpointForChain(mainnet.id), // Use mainnet ASP
