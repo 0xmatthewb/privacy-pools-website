@@ -21,6 +21,7 @@ type ContextType = {
   seed: string | null;
   setSeed: Dispatch<SetStateAction<string | null>>;
   accountService: AccountService | null;
+  legacyAccountService: AccountService | null;
 
   poolAccounts: PoolAccount[];
   poolAccountsByChainScope: Record<string, PoolAccount[]>; // chainId-scope -> poolAccounts
@@ -55,6 +56,7 @@ export const AccountContext = createContext({} as ContextType);
 export const AccountProvider = ({ children }: Props) => {
   const [seed, setSeed] = useState<string | null>(null);
   const accountServiceRef = useRef<AccountService | null>(null);
+  const legacyAccountServiceRef = useRef<AccountService | null>(null);
   const [poolAccounts, setPoolAccounts] = useState<ContextType['poolAccounts']>([]);
   const [poolAccountsByChainScope, setPoolAccountsByChainScope] = useState<ContextType['poolAccountsByChainScope']>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +74,7 @@ export const AccountProvider = ({ children }: Props) => {
     setPoolAccounts,
     setPoolAccountsByChainScope,
     accountServiceRef,
+    legacyAccountServiceRef,
     selectedPoolInfo.chainId,
   );
 
@@ -522,6 +525,7 @@ export const AccountProvider = ({ children }: Props) => {
     setPoolAccountsByChainScope({});
     setSeed(null);
     accountServiceRef.current = null;
+    legacyAccountServiceRef.current = null;
     hasProcessedInitialDepositsRef.current = false;
     setHasProcessedInitialDeposits(false);
   };
@@ -649,6 +653,7 @@ export const AccountProvider = ({ children }: Props) => {
         pendingAmountPoolAsset,
         seed,
         accountService: accountServiceRef.current,
+        legacyAccountService: legacyAccountServiceRef.current,
         setSeed,
         createAccount,
         loadAccount: handleLoadAccount,
