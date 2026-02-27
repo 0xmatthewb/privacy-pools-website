@@ -1,0 +1,23 @@
+import { getEnv } from '~/config/env';
+
+interface MigrationRuntimeConfig {
+  isMigrationActive: boolean;
+  migrationRelayerUrl: string;
+  useMockRelayer: boolean;
+  maxRetries: number;
+  initialBackoffMs: number;
+  maxBackoffMs: number;
+}
+
+export const getMigrationRuntimeConfig = (): MigrationRuntimeConfig => {
+  const { IS_MIGRATION_ACTIVE, MIGRATION_RELAYER_URL } = getEnv();
+
+  return {
+    isMigrationActive: IS_MIGRATION_ACTIVE,
+    migrationRelayerUrl: MIGRATION_RELAYER_URL,
+    maxRetries: 3,
+    initialBackoffMs: 2000, // 2 seconds
+    maxBackoffMs: 30000, // 30 seconds
+    useMockRelayer: true,
+  };
+};

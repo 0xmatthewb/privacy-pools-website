@@ -15,6 +15,10 @@ export interface Env {
   // HYPERSYNC_KEY removed from client-side for security
   SENTRY_DSN: string;
   SENTRY_AUTH_TOKEN: string;
+
+  // New migration config
+  IS_MIGRATION_ACTIVE: boolean;
+  MIGRATION_RELAYER_URL: string;
 }
 
 export interface Constants {
