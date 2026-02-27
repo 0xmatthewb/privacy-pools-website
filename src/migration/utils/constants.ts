@@ -1,5 +1,3 @@
-export const FALLBACK_MIGRATION_CHAIN_ID = 1;
-
 export const MOCK_RELAYER_DELAY_MS = 1200;
 
 export const MIGRATION_MESSAGES = {

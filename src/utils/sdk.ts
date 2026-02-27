@@ -227,8 +227,7 @@ export const loadAccount = async (
 
   return {
     accountService: result.account,
-    // TODO: Replace temporary mock when SDK returns legacy account service directly.
-    legacyAccountService: {} as AccountService,
+    legacyAccountService: result.account, // TODO: Replace with legacy account service when available
     errors: result.errors,
   };
 };
