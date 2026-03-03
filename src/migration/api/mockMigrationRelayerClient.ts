@@ -1,5 +1,5 @@
-import { createPublicClient, http, type PublicClient } from 'viem';
-import { chainData } from '~/config';
+import { createPublicClient, http, parseAbi, type PublicClient } from 'viem';
+import { chainData } from '~/config/chainData';
 import { MigrationRelayerRequest, MigrationRelayerResponse } from '../types/relayer';
 import { MOCK_RELAYER_DELAY_MS } from '../utils/constants';
 import { sleep } from '../utils/helpers';
@@ -31,16 +31,21 @@ const simulateRelayerTransaction = async (payload: MigrationRelayerRequest[numbe
   if (!publicClient) return false;
 
   try {
-    await publicClient.simulateCalls({
-      calls: [
-        {
-          to: payload.to,
-          data: payload.callData,
-        },
-      ],
+    const multicall3Abi = parseAbi([
+      'function aggregate3((address target,bool allowFailure,bytes callData)[] calls) payable returns ((bool success,bytes returnData)[] returnData)',
+    ]);
+
+    const simulation = await publicClient.simulateContract({
+      address: payload.to,
+      abi: multicall3Abi,
+      functionName: 'aggregate3',
+      args: [payload.calls],
     });
-    return true;
-  } catch {
+    console.log('[migration] simulateRelayerTransaction result', { results: simulation.result });
+
+    return simulation.result.every(({ success }) => success);
+  } catch (error) {
+    console.error('[migration] simulateRelayerTransaction error', { error });
     return false;
   }
 };
