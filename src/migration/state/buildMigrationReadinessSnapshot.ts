@@ -29,10 +29,10 @@ const createEmptyMigrationReadinessSnapshot = (): MigrationReadinessSnapshot => 
   };
 };
 
-export const buildMigrationReadinessSnapshot = async (input: {
+export const buildMigrationReadinessSnapshot = (input: {
   accountService: AccountService;
   legacyAccountService: AccountService;
-}): Promise<MigrationReadinessSnapshot> => {
+}): MigrationReadinessSnapshot => {
   const scopeToChainIndex = createScopeToChainIndex();
 
   const legacyDiscovery = toMigrationDiscovery(input.legacyAccountService, scopeToChainIndex);
