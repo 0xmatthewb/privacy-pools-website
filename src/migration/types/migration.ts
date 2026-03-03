@@ -1,20 +1,23 @@
-import { Hash } from '~/types';
+import type { AccountCommitment, Hash, Withdrawal, WithdrawalProof } from '~/types';
+import type { PoolInfo as SDKPoolInfo } from '@0xbow/privacy-pools-core-sdk';
 
-export type Scope = bigint | string;
+export type Scope = SDKPoolInfo['scope'] | bigint | string;
+export type CommitmentLabel = AccountCommitment['label'] | bigint | string;
+export type CommitmentHash = AccountCommitment['hash'] | bigint | string;
 
 export type MigrationFlowState = 'intro' | 'migrating' | 'success' | 'failed';
 
 export interface MigrationPoolInfo {
-  chainId: number;
+  chainId: SDKPoolInfo['chainId'];
   scope: Scope;
 }
 
 export interface DiscoveredCommitment {
-  chainId: number;
+  chainId: SDKPoolInfo['chainId'];
   scope: Scope;
-  label: bigint | string;
-  value: bigint;
-  hash?: bigint | string;
+  label: CommitmentLabel;
+  value: AccountCommitment['value'];
+  hash?: CommitmentHash;
 }
 
 export interface MigrationAccountDiscovery {
@@ -55,26 +58,14 @@ export interface MigrationReadinessSnapshot {
   };
 }
 
-export interface MigrationProofShape {
-  proof: {
-    pi_a: string[];
-    pi_b: string[][];
-    pi_c: string[];
-  };
-  publicSignals: string[];
-}
-
 export interface MigrationProofBundle {
-  chainId: number;
+  chainId: SDKPoolInfo['chainId'];
   scope: Hash;
   poolAddress: `0x${string}`;
-  commitmentLabel: bigint | string;
-  commitmentHash: bigint | string;
-  withdrawal: {
-    processooor: `0x${string}`;
-    data: `0x${string}`;
-  };
-  proof: MigrationProofShape;
+  commitmentLabel: CommitmentLabel;
+  commitmentHash: CommitmentHash;
+  withdrawal: Withdrawal;
+  proof: WithdrawalProof;
 }
 
 export interface MigrationContextState {

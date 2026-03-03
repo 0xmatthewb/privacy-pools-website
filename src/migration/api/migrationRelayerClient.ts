@@ -32,13 +32,20 @@ export const migrationRelayerClient = async (input: MigrationRelayerCallInput): 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
+  const relayerPayloads = input.payloads.map(({ txId, chainId, to, callData }) => ({
+    txId,
+    chainId,
+    to,
+    callData,
+  }));
+
   try {
     const response = await fetchImpl(migrateUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(input.payloads),
+      body: JSON.stringify(relayerPayloads),
       signal: controller.signal,
     });
 
