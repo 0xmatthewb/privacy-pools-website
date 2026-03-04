@@ -9,7 +9,6 @@ export type MigrationRelayerRequest = {
   chainId: number;
   to: `0x${string}`;
   callData: `0x${string}`;
-  calls: MigrationMulticallCall[];
 }[];
 
 export interface MigrationRelayerResponse {
