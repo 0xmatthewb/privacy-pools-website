@@ -1,10 +1,13 @@
-import { createPublicClient, http, parseAbi, type PublicClient } from 'viem';
+import { createPublicClient, decodeFunctionData, http, parseAbi, type PublicClient } from 'viem';
 import { chainData } from '~/config/chainData';
-import { MigrationRelayerRequest, MigrationRelayerResponse } from '../types/relayer';
+import { MigrationMulticallCall, MigrationRelayerRequest, MigrationRelayerResponse } from '../types/relayer';
 import { MOCK_RELAYER_DELAY_MS } from '../utils/constants';
 import { sleep } from '../utils/helpers';
 
 const publicClientByChainId = new Map<number, PublicClient>();
+const MULTICALL3_ABI = parseAbi([
+  'function aggregate3((address target,bool allowFailure,bytes callData)[] calls) payable returns ((bool success,bytes returnData)[] returnData)',
+]);
 
 const getChainRpcUrl = (chainId: number): string | null => {
   const rpcUrl = chainData[chainId]?.rpcUrl;
@@ -26,20 +29,37 @@ const getPublicClient = (chainId: number): PublicClient | null => {
   return client;
 };
 
+const decodeAggregateCalls = (callData: `0x${string}`): MigrationMulticallCall[] | null => {
+  try {
+    const decoded = decodeFunctionData({
+      abi: MULTICALL3_ABI,
+      data: callData,
+    });
+
+    if (decoded.functionName !== 'aggregate3') return null;
+
+    const [calls] = decoded.args;
+    if (!Array.isArray(calls)) return null;
+
+    return calls as MigrationMulticallCall[];
+  } catch {
+    return null;
+  }
+};
+
 const simulateRelayerTransaction = async (payload: MigrationRelayerRequest[number]): Promise<boolean> => {
   const publicClient = getPublicClient(payload.chainId);
   if (!publicClient) return false;
 
-  try {
-    const multicall3Abi = parseAbi([
-      'function aggregate3((address target,bool allowFailure,bytes callData)[] calls) payable returns ((bool success,bytes returnData)[] returnData)',
-    ]);
+  const calls = decodeAggregateCalls(payload.callData);
+  if (!calls) return false;
 
+  try {
     const simulation = await publicClient.simulateContract({
       address: payload.to,
-      abi: multicall3Abi,
+      abi: MULTICALL3_ABI,
       functionName: 'aggregate3',
-      args: [payload.calls],
+      args: [calls],
     });
     console.log('[migration] simulateRelayerTransaction result', { results: simulation.result });
 

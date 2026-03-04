@@ -1,14 +1,58 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import CheckIcon from '@mui/icons-material/Check';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { Box, Button, CircularProgress, styled, Typography } from '@mui/material';
 import { BaseModal } from '~/components';
 import { ModalType } from '~/types';
 import { useMigration } from '../hooks/useMigration';
 
+const FALLBACK_ERROR_MESSAGE = 'We could not complete the migration.';
+const ERROR_PREVIEW_MAX_LENGTH = 220;
+
+const getFullErrorMessage = (message: string | null): string => {
+  return message?.trim() || FALLBACK_ERROR_MESSAGE;
+};
+
+const toErrorPreview = (message: string): string => {
+  if (message.length <= ERROR_PREVIEW_MAX_LENGTH) return message;
+  return `${message.slice(0, ERROR_PREVIEW_MAX_LENGTH)}...`;
+};
+
+const copyTextToClipboard = async (value: string): Promise<boolean> => {
+  if (typeof navigator === 'undefined') return false;
+  if (!navigator.clipboard?.writeText) return false;
+
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const MigrationModal = () => {
   const { isActive, isBlocking, flowState, errorMessage, retryCount, maxRetries, startMigration, completeMigration } =
     useMigration();
+  const [hasCopiedError, setHasCopiedError] = useState(false);
+
+  const fullErrorMessage = getFullErrorMessage(errorMessage);
+  const previewErrorMessage = toErrorPreview(fullErrorMessage);
+  const CopyStatusIcon = hasCopiedError ? CheckIcon : ContentCopyIcon;
+  const copyButtonLabel = hasCopiedError ? 'Copied full error' : 'Copy full error';
+
+  const handleCopyFullError = async () => {
+    const isCopied = await copyTextToClipboard(fullErrorMessage);
+    setHasCopiedError(isCopied);
+  };
+
+  useEffect(() => {
+    setHasCopiedError(false);
+    if (flowState === 'failed') {
+      console.error('[migration] flow failed', { errorMessage: fullErrorMessage });
+    }
+  }, [flowState, fullErrorMessage]);
 
   if (!isActive || !isBlocking) return null;
 
@@ -53,7 +97,13 @@ export const MigrationModal = () => {
         {flowState === 'failed' && (
           <>
             <Title>Migration Failed</Title>
-            <Description>{errorMessage ?? 'We could not complete the migration.'}</Description>
+            <ErrorDescription>{previewErrorMessage}</ErrorDescription>
+            <CopyButton variant='text' onClick={handleCopyFullError}>
+              <CopyButtonContent>
+                <CopyStatusIcon fontSize='small' />
+                <span>{copyButtonLabel}</span>
+              </CopyButtonContent>
+            </CopyButton>
             <ActionButton onClick={startMigration}>Retry Migration</ActionButton>
           </>
         )}
@@ -90,6 +140,10 @@ const Description = styled(Typography)(({ theme }) => ({
   maxWidth: '36rem',
 }));
 
+const ErrorDescription = styled(Description)(() => ({
+  overflowWrap: 'anywhere',
+}));
+
 const RetryLabel = styled(Typography)(({ theme }) => ({
   margin: 0,
   fontSize: '1.2rem',
@@ -101,6 +155,24 @@ const RetryLabel = styled(Typography)(({ theme }) => ({
 const ActionButton = styled(Button)(() => ({
   width: '100%',
   textTransform: 'none',
+}));
+
+const CopyButton = styled(Button)(({ theme }) => ({
+  width: 'fit-content',
+  textTransform: 'none',
+  color: theme.palette.text.secondary,
+  padding: 0,
+  minWidth: 0,
+  '&:hover': {
+    backgroundColor: 'transparent',
+    color: theme.palette.text.primary,
+  },
+}));
+
+const CopyButtonContent = styled(Box)(() => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.6rem',
 }));
 
 const SuccessCircle = styled(Box)(({ theme }) => ({

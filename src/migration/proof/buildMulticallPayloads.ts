@@ -87,7 +87,6 @@ export const buildMulticallPayloads = (bundles: readonly MigrationProofBundle[])
       chainId,
       to: getMulticallContract(chainId),
       callData,
-      calls: multicallCalls,
     });
   }
 
