@@ -19,8 +19,8 @@ export const MigrationModal = () => {
           <>
             <Title>Key Migration Needed</Title>
             <Description>
-              Your security is our priority. We are upgrading to a stronger encryption method. Migrate your keys to
-              continue using all features.
+              Your security is our priority. We are increasing the entropy and strength of your keys. Migrate your keys
+              to continue using all features.
             </Description>
             <ActionButton onClick={startMigration}>Continue with Migration</ActionButton>
           </>
@@ -30,7 +30,7 @@ export const MigrationModal = () => {
           <>
             <CircularProgress size={48} />
             <Title>Migrating Keys...</Title>
-            <Description>Please wait while we upgrade your encryption.</Description>
+            <Description>Please wait while we upgrade your keys&apos; entropy.</Description>
             {retryCount > 0 && (
               <RetryLabel>
                 Retrying failed transactions ({retryCount}/{maxRetries})

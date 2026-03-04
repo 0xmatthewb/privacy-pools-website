@@ -23,45 +23,33 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
   const { isConnected, isLogged, logout } = useAuthContext();
   const { addNotification } = useNotifications();
   const { setModalOpen, modalOpen, setIsClosable } = useModal();
-  const {
-    accountService,
-    legacyAccountService,
-    hasProcessedInitialDeposits: hasProcessedInitialDepositsFromAccount,
-    isLoading: isAccountLoading,
-  } = useAccountContext();
+  const { accountService, legacyAccountService } = useAccountContext();
   const { submitMigration } = useMigrationRelayer();
   const goTo = useGoTo();
 
   const [flowState, setFlowState] = useState<MigrationContextState['flowState']>('intro');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [migrationReadiness, setMigrationReadiness] = useState<MigrationContextState['migrationReadiness']>(null);
+  const [isCompletingMigration, setIsCompletingMigration] = useState(false);
   const isMigrationInFlightRef = useRef(false);
+  const hasDeferredInvalidationRef = useRef(false);
 
-  const canBuildMigrationReadiness =
-    runtime.isMigrationActive &&
-    isConnected &&
-    isLogged &&
-    !!accountService &&
-    !!legacyAccountService &&
-    hasProcessedInitialDepositsFromAccount &&
-    !isAccountLoading;
+  const resetMigrationFlowState = useCallback(() => {
+    setFlowState('intro');
+    setErrorMessage(null);
+    setRetryCount(0);
+    setIsCompletingMigration(false);
+    isMigrationInFlightRef.current = false;
+    hasDeferredInvalidationRef.current = false;
+  }, []);
 
-  useEffect(() => {
-    if (!runtime.isMigrationActive) {
-      setMigrationReadiness(null);
-      setFlowState('intro');
-      setErrorMessage(null);
-      setRetryCount(0);
-      return;
-    }
+  const hasMigrationSession = runtime.isMigrationActive && isConnected && isLogged;
+  const hasMigrationServices = !!accountService && !!legacyAccountService;
+  const canBuildMigrationReadiness = hasMigrationSession && hasMigrationServices;
 
+  const migrationReadiness = useMemo<MigrationContextState['migrationReadiness']>(() => {
     if (!canBuildMigrationReadiness || !accountService || !legacyAccountService) {
-      setMigrationReadiness(null);
-      setFlowState('intro');
-      setErrorMessage(null);
-      setRetryCount(0);
-      return;
+      return null;
     }
 
     const readiness = buildMigrationReadinessSnapshot({
@@ -69,18 +57,30 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
       legacyAccountService,
     });
     console.log('[migration] readiness', { readiness });
-    setMigrationReadiness(readiness);
-  }, [accountService, canBuildMigrationReadiness, legacyAccountService, runtime.isMigrationActive]);
+    return readiness;
+  }, [accountService, canBuildMigrationReadiness, legacyAccountService]);
+
+  useEffect(() => {
+    const hasHardInvalidation =
+      !runtime.isMigrationActive || !isConnected || !isLogged || !accountService || !legacyAccountService;
+
+    if (hasHardInvalidation) {
+      if (isMigrationInFlightRef.current) {
+        hasDeferredInvalidationRef.current = true;
+        return;
+      }
+
+      resetMigrationFlowState();
+      return;
+    }
+  }, [accountService, isConnected, isLogged, legacyAccountService, resetMigrationFlowState, runtime.isMigrationActive]);
 
   const requiresRealMigration = !!migrationReadiness?.requiresMigration && !migrationReadiness?.isFullyMigrated;
-
+  const hasStartedMigrationFlow = flowState === 'migrating' || flowState === 'failed' || flowState === 'success';
   const isBlocking =
-    runtime.isMigrationActive &&
-    isConnected &&
-    isLogged &&
-    hasProcessedInitialDepositsFromAccount &&
-    !isAccountLoading &&
-    requiresRealMigration;
+    hasMigrationSession &&
+    !isCompletingMigration &&
+    (hasStartedMigrationFlow || !migrationReadiness || requiresRealMigration);
 
   useEffect(() => {
     if (!runtime.isMigrationActive) return;
@@ -106,26 +106,33 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
   }, []);
 
   const completeMigration = useCallback(() => {
+    if (isCompletingMigration) return;
+
+    setIsCompletingMigration(true);
     setModalOpen(ModalType.NONE);
     setIsClosable(true);
     addNotification('success', MIGRATION_MESSAGES.success);
-    logout();
-    goTo(ROUTER.account.base);
-  }, [addNotification, goTo, logout, setIsClosable, setModalOpen]);
+
+    // Let modal context updates flush before invalidating auth state.
+    setTimeout(() => {
+      logout();
+      goTo(ROUTER.account.base);
+    }, 0);
+  }, [addNotification, goTo, isCompletingMigration, logout, setIsClosable, setModalOpen]);
 
   const startMigration = useCallback(async () => {
     if (!runtime.isMigrationActive) return;
     if (!isBlocking) return;
+    if (isCompletingMigration) return;
     if (isMigrationInFlightRef.current) return;
+
+    // Fail closed while readiness is unresolved, but only execute once migration is confirmed.
+    if (!migrationReadiness || !requiresRealMigration || !accountService || !legacyAccountService) return;
+
     isMigrationInFlightRef.current = true;
+    hasDeferredInvalidationRef.current = false;
 
     try {
-      if (!accountService || !legacyAccountService || !migrationReadiness) {
-        setFlowState('failed');
-        setErrorMessage(MIGRATION_MESSAGES.missingRequiredAccountData);
-        return;
-      }
-
       setFlowState('migrating');
       setErrorMessage(null);
       setRetryCount(0);
@@ -142,23 +149,34 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
         onRetry: setRetryCount,
       });
 
-      finalizeSuccessfulMigration();
+      if (!hasDeferredInvalidationRef.current) {
+        finalizeSuccessfulMigration();
+      }
     } catch (error) {
-      setFlowState('failed');
-      setErrorMessage(error instanceof Error ? error.message : MIGRATION_MESSAGES.unexpectedFailure);
+      if (!hasDeferredInvalidationRef.current) {
+        setFlowState('failed');
+        setErrorMessage(error instanceof Error ? error.message : MIGRATION_MESSAGES.unexpectedFailure);
+      }
     } finally {
       isMigrationInFlightRef.current = false;
+
+      if (hasDeferredInvalidationRef.current) {
+        resetMigrationFlowState();
+      }
     }
   }, [
     accountService,
     finalizeSuccessfulMigration,
     isBlocking,
+    isCompletingMigration,
     runtime.initialBackoffMs,
     runtime.isMigrationActive,
     runtime.maxBackoffMs,
     runtime.maxRetries,
     legacyAccountService,
     migrationReadiness,
+    resetMigrationFlowState,
+    requiresRealMigration,
     submitMigration,
   ]);
 
