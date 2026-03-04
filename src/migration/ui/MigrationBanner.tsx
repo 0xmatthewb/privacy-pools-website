@@ -16,7 +16,7 @@ export const MigrationBanner = () => {
     <BannerRoot>
       <ShieldOutlinedIcon fontSize='small' />
       <BannerText variant='body2'>
-        We strengthened our key generation encryption.
+        We strengthened our key generation entropy.
         <AnnouncementLink href={ANNOUNCEMENT_URL} target='_blank' rel='noopener noreferrer'>
           Read the announcement
         </AnnouncementLink>
