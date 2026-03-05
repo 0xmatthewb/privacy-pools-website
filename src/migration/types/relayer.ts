@@ -16,9 +16,25 @@ export interface MigrationRelayerResponse {
   success: string[];
 }
 
+export interface MigrationRelayerTrackingEntry {
+  supertxHash: string;
+}
+
+export interface MigrationRelayerSubmitResponse {
+  failed: string[];
+  success: string[];
+  tracking: Record<string, MigrationRelayerTrackingEntry>;
+}
+
+export type MigrationRelayerStatus = 'PENDING' | 'MINING' | 'MINED_SUCCESS' | 'FAILED';
+
+export interface MigrationRelayerStatusResponse {
+  status: MigrationRelayerStatus;
+  error: string | null;
+}
+
 export interface MigrationRelayerCallInput {
   payloads: MigrationRelayerRequest;
   endpoint: string;
-  timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }
