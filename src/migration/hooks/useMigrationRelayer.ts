@@ -20,16 +20,12 @@ export const useMigrationRelayer = (): UseMigrationRelayerReturn => {
         return mockMigrationRelayerClient(payloads);
       }
 
-      if (!runtime.migrationRelayerUrl.trim()) {
-        throw new Error('Migration relayer URL is missing. Set NEXT_PUBLIC_MIGRATION_RELAYER_URL.');
-      }
-
       return migrationRelayerClient({
         payloads,
-        endpoint: runtime.migrationRelayerUrl,
+        endpoint: '/api',
       });
     },
-    [runtime.migrationRelayerUrl, runtime.useMockRelayer],
+    [runtime.useMockRelayer],
   );
 
   return {
