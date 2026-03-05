@@ -1,7 +1,8 @@
+import { generateWithdrawalSecrets } from '@0xbow/privacy-pools-core-sdk';
 import { getAddress } from 'viem';
 import { chainData, PoolInfo } from '~/config/chainData';
-import { AccountCommitment, AccountService, Hash, Withdrawal } from '~/types';
-import { createWithdrawalSecrets, generateWithdrawalProof, getContext, prepareWithdrawalProofInput } from '~/utils';
+import { AccountCommitment, AccountService, Hash, MasterKeys, Withdrawal } from '~/types';
+import { generateWithdrawalProof, getContext, prepareWithdrawalProofInput } from '~/utils';
 import { getMulticallContract } from '../config/multicallContract';
 import { MigrationProofBundle } from '../types/migration';
 import { createAspMerkleProofBuilder } from '../utils/asp';
@@ -106,6 +107,10 @@ export const buildMigrationProofs = async (input: {
   const scopeToChainIndex = createScopeToChainIndex();
   const legacyCommitments = extractLegacyCommitments(input.legacyAccountService, scopeToChainIndex);
   const buildAspMerkleProofs = createAspMerkleProofBuilder();
+  const safeMasterKeys: MasterKeys = {
+    masterNullifier: input.accountService.account.masterKeys[0],
+    masterSecret: input.accountService.account.masterKeys[1],
+  };
 
   for (const candidate of legacyCommitments) {
     try {
@@ -123,8 +128,10 @@ export const buildMigrationProofs = async (input: {
         commitmentLabel: candidate.commitmentLabel,
       });
 
-      // Generate new withdrawal secrets from safe master keys
-      const { secret, nullifier } = createWithdrawalSecrets(input.accountService, candidate.commitment);
+      // Derive new secrets from safe keys
+      // NOTE: uses generateWithdrawalSecrets with the safe master keys, not the legacy ones.
+      // The label and index (0n for first withdrawal of each note) are the same.
+      const { secret, nullifier } = generateWithdrawalSecrets(safeMasterKeys, candidate.commitment.label, 0n);
 
       const proofInput = prepareWithdrawalProofInput(
         candidate.commitment,
