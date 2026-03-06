@@ -7,32 +7,6 @@ export type CommitmentHash = AccountCommitment['hash'] | bigint | string;
 
 export type MigrationFlowState = 'intro' | 'migrating' | 'success' | 'failed';
 
-export interface MigrationPoolInfo {
-  chainId: SDKPoolInfo['chainId'];
-  scope: Scope;
-}
-
-export interface DiscoveredCommitment {
-  chainId: SDKPoolInfo['chainId'];
-  scope: Scope;
-  label: CommitmentLabel;
-  value: AccountCommitment['value'];
-  hash?: CommitmentHash;
-}
-
-export interface MigrationAccountDiscovery {
-  accountHandle: unknown;
-  spendableCommitments: DiscoveredCommitment[];
-  errors?: readonly unknown[];
-}
-
-export interface ChainDerivedStatus {
-  expectedLegacyCommitments?: number;
-  legacyMasterSeedNullifiedCount?: number;
-  migratedCommitments?: number;
-  hasPostMigrationCommitments?: boolean;
-}
-
 export interface MigrationChainReadiness {
   expectedLegacyCommitments: number;
   migratedCommitments: number;

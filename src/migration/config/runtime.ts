@@ -18,6 +18,6 @@ export const getMigrationRuntimeConfig = (): MigrationRuntimeConfig => {
     maxRetries: 3,
     initialBackoffMs: 2000, // 2 seconds
     maxBackoffMs: 30000, // 30 seconds
-    useMockRelayer: true,
+    useMockRelayer: false,
   };
 };
