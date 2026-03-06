@@ -217,7 +217,11 @@ export const createAccount = (seed: string) => {
 
 export const loadAccount = async (
   seed: string,
-): Promise<{ accountService: AccountService; legacyAccountService: AccountService; errors: PoolEventsError[] }> => {
+): Promise<{
+  accountService: AccountService;
+  legacyAccountService: AccountService | null;
+  errors: PoolEventsError[];
+}> => {
   const result = await AccountService.initializeWithEvents(dataService, { mnemonic: seed }, pools);
 
   // Log any errors that occurred during event fetching
@@ -227,7 +231,7 @@ export const loadAccount = async (
 
   return {
     accountService: result.account,
-    legacyAccountService: result.account, // TODO: Replace with legacy account service when available
+    legacyAccountService: result.legacyAccount ?? null,
     errors: result.errors,
   };
 };
