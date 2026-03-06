@@ -5,6 +5,7 @@ import { chainData } from '~/config/chainData';
 import { getEnv } from '~/config/env';
 import { useChainContext, useExternalServices, useNotifications, usePoolAccountsContext } from '~/hooks';
 import { useAccountManager } from '~/hooks/useAccountManager';
+import { buildLegacyMigrationHistory } from '~/migration/utils/helpers';
 import { AccountService, DepositsByLabelResponse, EventType, PoolAccount, ReviewStatus, HistoryData } from '~/types';
 import {
   addPoolAccount,
@@ -594,21 +595,27 @@ export const AccountProvider = ({ children }: Props) => {
   }, [aspError, addNotification]);
 
   const historyData = useMemo(() => {
-    const history = [];
+    const { history, migratedLabels } = buildLegacyMigrationHistory(legacyAccountServiceRef.current);
 
     for (const pa of poolAccounts) {
-      history.push({
-        type: EventType.DEPOSIT,
-        txHash: pa.deposit.txHash,
-        reviewStatus: pa.reviewStatus,
-        amount: pa.deposit.value,
-        timestamp: Number(pa.deposit.timestamp),
-        label: pa.label,
-        scope: pa.scope,
-        chainId: pa.chainId,
-      });
+      const isMigrated = migratedLabels.has(String(pa.label));
+
+      if (!isMigrated) {
+        history.push({
+          type: EventType.DEPOSIT,
+          txHash: pa.deposit.txHash,
+          reviewStatus: pa.reviewStatus,
+          amount: pa.deposit.value,
+          timestamp: Number(pa.deposit.timestamp),
+          label: pa.label,
+          scope: pa.scope,
+          chainId: pa.chainId,
+        });
+      }
 
       for (const [idx, child] of pa.children.entries()) {
+        if (isMigrated && child.hash === pa.deposit.hash) continue;
+
         history.push({
           type: EventType.WITHDRAWAL,
           txHash: child.txHash,

@@ -113,7 +113,7 @@ export const getStatus = (row: {
   type?: EventType | string;
   reviewStatus?: ReviewStatus | StatusObject;
 }): ReviewStatus => {
-  if (row.type === EventType.WITHDRAWAL || row.type === 'ragequit') {
+  if (row.type === EventType.WITHDRAWAL || row.type === EventType.MIGRATION || row.type === 'ragequit') {
     return ReviewStatus.APPROVED;
   }
 

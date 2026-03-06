@@ -17,7 +17,8 @@ export const DataSection = () => {
   const { currentSelectedRelayerData } = useExternalServices();
   const isDeposit = selectedHistoryData?.type === EventType.DEPOSIT;
   const isExit = selectedHistoryData?.type === EventType.EXIT;
-  const isWithdrawal = !isDeposit && !isExit;
+  const isMigration = selectedHistoryData?.type === EventType.MIGRATION;
+  const isWithdrawal = !isDeposit && !isExit && !isMigration;
 
   const aspOrRelayer = {
     label: isDeposit ? 'ASP' : 'Relayer',
@@ -107,7 +108,7 @@ export const DataSection = () => {
           <Value variant='body2'>{valueText}</Value>
         </Row>
 
-        {!isExit && (
+        {!isExit && !isMigration && (
           <Row>
             <Label variant='body2'>Received:</Label>
             <Value variant='body2'>{receivedText}</Value>
@@ -115,7 +116,7 @@ export const DataSection = () => {
         )}
       </Stack>
 
-      {!isExit && (
+      {!isExit && !isMigration && (
         <Stack>
           <Row>
             <Label variant='body2'>{aspOrRelayer.label}:</Label>
