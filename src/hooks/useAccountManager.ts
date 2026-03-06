@@ -1,6 +1,7 @@
 'use client';
 
 import { RefObject, useCallback } from 'react';
+import { resolveLegacyTimestamps } from '~/migration/utils/helpers';
 import { AccountService, PoolAccount } from '~/types';
 import { createAccount as sdkCreateAccount, getPoolAccountsFromAccount, loadAccount as sdkLoadAccount } from '~/utils';
 
@@ -38,6 +39,14 @@ export function useAccountManager(
 
     accountServiceRef.current = _accountService;
     legacyAccountServiceRef.current = _legacyAccountService;
+
+    if (_legacyAccountService) {
+      try {
+        await resolveLegacyTimestamps(_legacyAccountService.account);
+      } catch (err) {
+        console.warn('Failed to resolve legacy timestamps (non-critical):', err);
+      }
+    }
 
     const { poolAccounts, poolAccountsByChainScope } = await getPoolAccountsFromAccount(
       _accountService.account,

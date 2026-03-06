@@ -11,6 +11,7 @@ import { InfoTooltip } from '~/components/InfoTooltip';
 import { allPoolsChainData, getConfig } from '~/config';
 import { ViewAllButton, ViewAllText } from '~/containers';
 import { useAccountContext, useAdvancedView } from '~/hooks';
+import { buildLegacyMigrationHistory } from '~/migration/utils/helpers';
 import { EventType, ReviewStatus } from '~/types';
 import { aspClient, ROUTER } from '~/utils';
 
@@ -18,7 +19,7 @@ export const ActivityPreview = () => {
   const { push } = useRouter();
   const { address } = useAccount();
   const { previewGlobalEvents, isLoading } = useAdvancedView();
-  const { poolAccountsByChainScope } = useAccountContext();
+  const { poolAccountsByChainScope, legacyAccountService } = useAccountContext();
 
   const [view, setView] = useState<'global' | 'personal' | 'stats'>('global');
 
@@ -119,23 +120,28 @@ export const ActivityPreview = () => {
 
   // Build ALL personal activity from all pools (not filtered by selectedPoolInfo)
   const allPersonalActivity = useMemo(() => {
-    const history = [];
+    const { history, migratedLabels } = buildLegacyMigrationHistory(legacyAccountService);
 
-    // Get all pool accounts from all chains/scopes
     for (const poolAccounts of Object.values(poolAccountsByChainScope)) {
       for (const pa of poolAccounts) {
-        history.push({
-          type: EventType.DEPOSIT,
-          txHash: pa.deposit.txHash,
-          reviewStatus: pa.reviewStatus,
-          amount: pa.deposit.value,
-          timestamp: Number(pa.deposit.timestamp),
-          label: pa.label,
-          scope: pa.scope,
-          chainId: pa.chainId,
-        });
+        const isMigrated = migratedLabels.has(String(pa.label));
+
+        if (!isMigrated) {
+          history.push({
+            type: EventType.DEPOSIT,
+            txHash: pa.deposit.txHash,
+            reviewStatus: pa.reviewStatus,
+            amount: pa.deposit.value,
+            timestamp: Number(pa.deposit.timestamp),
+            label: pa.label,
+            scope: pa.scope,
+            chainId: pa.chainId,
+          });
+        }
 
         for (const [idx, child] of pa.children.entries()) {
+          if (isMigrated && child.hash === pa.deposit.hash) continue;
+
           history.push({
             type: EventType.WITHDRAWAL,
             txHash: child.txHash,
@@ -165,7 +171,7 @@ export const ActivityPreview = () => {
     }
 
     return history.sort((a, b) => b.timestamp - a.timestamp).slice(0, 6);
-  }, [poolAccountsByChainScope]);
+  }, [poolAccountsByChainScope, legacyAccountService]);
 
   const historyData = view === 'global' ? previewGlobalEvents : allPersonalActivity;
 
