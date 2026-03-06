@@ -74,7 +74,7 @@ export const MigrationModal = () => {
           <>
             <CircularProgress size={48} />
             <Title>Migrating Keys...</Title>
-            <Description>Please wait while we upgrade your keys&apos; entropy.</Description>
+            <Description>Please wait while we upgrade the entropy of your keys.</Description>
             {retryCount > 0 && (
               <RetryLabel>
                 Retrying failed transactions ({retryCount}/{maxRetries})
