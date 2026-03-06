@@ -3,9 +3,9 @@ import { getAddress } from 'viem';
 import { chainData, PoolInfo } from '~/config/chainData';
 import { AccountCommitment, AccountService, Hash, MasterKeys, Withdrawal } from '~/types';
 import { generateWithdrawalProof, getContext, prepareWithdrawalProofInput } from '~/utils';
-import { getMulticallContract } from '../config/multicallContract';
 import { MigrationProofBundle } from '../types/migration';
 import { createAspMerkleProofBuilder } from '../utils/asp';
+import { MULTICALL3_WITH_FALLBACK } from '../utils/constants';
 import { createScopeToChainIndex, normalizeScope } from '../utils/misc';
 
 type LegacyCommitmentCandidate = {
@@ -114,7 +114,7 @@ export const buildMigrationProofs = async (input: {
 
   for (const candidate of legacyCommitments) {
     try {
-      const multicallContract = getAddress(getMulticallContract(candidate.chainId));
+      const multicallContract = MULTICALL3_WITH_FALLBACK;
       const withdrawal: Withdrawal = {
         processooor: multicallContract,
         data: '0x',

@@ -1,8 +1,8 @@
 import { encodeFunctionData, parseAbi } from 'viem';
 import { privacyPoolAbi } from '~/utils/abi';
-import { getMulticallContract } from '../config/multicallContract';
 import { MigrationProofBundle } from '../types/migration';
 import { MigrationMulticallCall, MigrationRelayerRequest } from '../types/relayer';
+import { MULTICALL3_WITH_FALLBACK } from '../utils/constants';
 
 const toProofArgs = (bundle: MigrationProofBundle) => {
   const proof = bundle.proof.proof;
@@ -85,7 +85,7 @@ export const buildMulticallPayloads = (bundles: readonly MigrationProofBundle[])
     payloads.push({
       txId: index + 1,
       chainId,
-      to: getMulticallContract(chainId),
+      to: MULTICALL3_WITH_FALLBACK,
       callData,
     });
   }
