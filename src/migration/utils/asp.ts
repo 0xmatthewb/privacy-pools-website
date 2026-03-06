@@ -1,4 +1,4 @@
-import { chainData, PoolInfo } from '~/config/chainData';
+import { chainData, ExternalAspConfig, PoolInfo } from '~/config/chainData';
 import { aspClient, getMerkleProof, mergeAndSortAspLeaves } from '~/utils';
 import { sleep } from './helpers';
 import { normalizeScope } from './misc';
@@ -27,6 +27,17 @@ type BuildAspMerkleProofsInput = {
 const MAX_ASP_FETCH_ATTEMPTS = 3;
 const ASP_FETCH_RETRY_DELAY_MS = 1200;
 
+const findChainBrevisConfig = (chainId: number): ExternalAspConfig | undefined => {
+  const chain = chainData[chainId];
+  if (!chain) return undefined;
+  for (const pool of chain.poolInfo) {
+    if (pool.externalAsp?.provider === 'brevis') {
+      return pool.externalAsp;
+    }
+  }
+  return undefined;
+};
+
 const fetchMerkleLeaves = async (poolInfo: PoolInfo): Promise<MerkleLeaves> => {
   const chain = chainData[poolInfo.chainId];
   if (!chain) {
@@ -40,8 +51,9 @@ const fetchMerkleLeaves = async (poolInfo: PoolInfo): Promise<MerkleLeaves> => {
   ]);
 
   let aspLeaves = mtLeaves.aspLeaves ?? [];
-  if (poolInfo.externalAsp?.provider === 'brevis') {
-    const brevisLeaves = await aspClient.fetchBrevisAspLeaves(poolInfo.externalAsp.baseUrl);
+  const brevisConfig = poolInfo.externalAsp ?? findChainBrevisConfig(poolInfo.chainId);
+  if (brevisConfig?.provider === 'brevis') {
+    const brevisLeaves = await aspClient.fetchBrevisAspLeaves(brevisConfig.baseUrl);
     aspLeaves = mergeAndSortAspLeaves(mtLeaves.aspLeaves, brevisLeaves.aspLeaves) ?? [];
   }
 
