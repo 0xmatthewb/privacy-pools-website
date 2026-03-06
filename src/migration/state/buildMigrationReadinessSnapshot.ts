@@ -1,17 +1,6 @@
 import { AccountService } from '~/types';
-import { DiscoveredCommitment, MigrationChainReadiness, MigrationReadinessSnapshot, Scope } from '../types/migration';
-import {
-  createScopeToChainIndex,
-  toMigrationDiscovery,
-  extractPoolsFromAccountState,
-  addPoolsFromCommitments,
-  uniqueSorted,
-  collectLegacyHistoryKeysByChain,
-  collectCommitmentKeysByChain,
-  countIntersection,
-  normalizeScope,
-  addPools,
-} from '../utils/misc';
+import { MigrationChainReadiness, MigrationReadinessSnapshot } from '../types/migration';
+import { createScopeToChainIndex, normalizeScope } from '../utils/misc';
 
 const createEmptyMigrationReadinessSnapshot = (): MigrationReadinessSnapshot => {
   return {
@@ -35,102 +24,52 @@ export const buildMigrationReadinessSnapshot = (input: {
 }): MigrationReadinessSnapshot => {
   const scopeToChainIndex = createScopeToChainIndex();
 
-  const legacyDiscovery = toMigrationDiscovery(input.legacyAccountService, scopeToChainIndex);
-  const upgradedDiscovery = toMigrationDiscovery(input.accountService, scopeToChainIndex);
-
-  const poolsFromAccountState = addPools(
-    extractPoolsFromAccountState(input.legacyAccountService, scopeToChainIndex),
-    extractPoolsFromAccountState(input.accountService, scopeToChainIndex),
-  );
-
-  const pools = addPoolsFromCommitments(
-    addPoolsFromCommitments(poolsFromAccountState, legacyDiscovery.spendableCommitments),
-    upgradedDiscovery.spendableCommitments,
-  );
-
-  if (pools.length === 0) {
+  const legacyPoolAccounts = input.legacyAccountService?.account?.poolAccounts;
+  if (!(legacyPoolAccounts instanceof Map) || legacyPoolAccounts.size === 0) {
     return createEmptyMigrationReadinessSnapshot();
   }
 
-  const chainIds = uniqueSorted(pools.map((pool) => pool.chainId));
-  const poolScopesByChain = new Map<number, Scope[]>();
-  for (const pool of pools) {
-    const scoped = poolScopesByChain.get(pool.chainId) ?? [];
-    scoped.push(pool.scope);
-    poolScopesByChain.set(pool.chainId, scoped);
+  const chainReadiness = new Map<number, { total: number; migrated: number; scopes: Set<string> }>();
+
+  for (const [rawScope, poolAccounts] of legacyPoolAccounts.entries()) {
+    const normalizedScope = normalizeScope(rawScope);
+    const chainId = scopeToChainIndex.get(normalizedScope);
+    if (!chainId || !Array.isArray(poolAccounts)) continue;
+
+    for (const pa of poolAccounts) {
+      if (pa.ragequit) continue;
+
+      const entry = chainReadiness.get(chainId) ?? { total: 0, migrated: 0, scopes: new Set<string>() };
+      entry.scopes.add(normalizedScope);
+      entry.total += 1;
+      if (pa.isMigrated) entry.migrated += 1;
+      chainReadiness.set(chainId, entry);
+    }
   }
 
-  const legacyByChain = new Map<number, DiscoveredCommitment[]>();
-  const upgradedByChain = new Map<number, DiscoveredCommitment[]>();
-  for (const chainId of chainIds) {
-    legacyByChain.set(chainId, []);
-    upgradedByChain.set(chainId, []);
+  if (chainReadiness.size === 0) {
+    return createEmptyMigrationReadinessSnapshot();
   }
 
-  for (const commitment of legacyDiscovery.spendableCommitments) {
-    const bucket = legacyByChain.get(commitment.chainId);
-    if (bucket) bucket.push(commitment);
-  }
-
-  for (const commitment of upgradedDiscovery.spendableCommitments) {
-    const bucket = upgradedByChain.get(commitment.chainId);
-    if (bucket) bucket.push(commitment);
-  }
-
-  const legacyHistoryKeysByChain = collectLegacyHistoryKeysByChain(input.legacyAccountService, scopeToChainIndex);
-  const legacySpendableKeysByChain = collectCommitmentKeysByChain(legacyDiscovery.spendableCommitments);
-  const upgradedSpendableKeysByChain = collectCommitmentKeysByChain(upgradedDiscovery.spendableCommitments);
-
-  const warnings: string[] = [];
   const chains: Record<number, MigrationChainReadiness> = {};
-
-  for (const chainId of chainIds) {
-    const scopes = poolScopesByChain.get(chainId) ?? [];
-    const legacyCommitments = legacyByChain.get(chainId) ?? [];
-    const upgradedCommitments = upgradedByChain.get(chainId) ?? [];
-
-    const legacySpendableCount = legacyCommitments.length;
-    const upgradedSpendableCount = upgradedCommitments.length;
-    const legacySpendableKeys = legacySpendableKeysByChain.get(chainId) ?? new Set<string>();
-    const upgradedSpendableKeys = upgradedSpendableKeysByChain.get(chainId) ?? new Set<string>();
-    const legacyHistoryKeys = legacyHistoryKeysByChain.get(chainId) ?? legacySpendableKeys;
-
-    const migratedCommitments = countIntersection(upgradedSpendableKeys, legacyHistoryKeys);
-    const expectedLegacyCommitments = new Set([
-      ...legacySpendableKeys,
-      ...[...upgradedSpendableKeys].filter((key) => legacyHistoryKeys.has(key)),
-    ]).size;
-    const legacyMasterSeedNullifiedCount = Math.max(expectedLegacyCommitments - legacySpendableKeys.size, 0);
-    const hasPostMigrationCommitments = upgradedSpendableCount > 0;
-
-    const isMigrated =
-      expectedLegacyCommitments === 0
-        ? true
-        : migratedCommitments >= expectedLegacyCommitments &&
-          legacyMasterSeedNullifiedCount >= expectedLegacyCommitments &&
-          hasPostMigrationCommitments;
-
+  for (const [chainId, entry] of chainReadiness.entries()) {
     chains[chainId] = {
-      expectedLegacyCommitments,
-      migratedCommitments,
-      legacyMasterSeedNullifiedCount,
-      hasPostMigrationCommitments,
-      isMigrated,
-      legacySpendableCommitments: legacySpendableCount,
-      upgradedSpendableCommitments: upgradedSpendableCount,
-      scopes: scopes.map((scope) => normalizeScope(scope)),
+      expectedLegacyCommitments: entry.total,
+      migratedCommitments: entry.migrated,
+      legacyMasterSeedNullifiedCount: entry.migrated,
+      hasPostMigrationCommitments: entry.migrated > 0,
+      isMigrated: entry.total > 0 && entry.migrated >= entry.total,
+      legacySpendableCommitments: entry.total - entry.migrated,
+      upgradedSpendableCommitments: entry.migrated,
+      scopes: [...entry.scopes],
     };
   }
 
-  const requiredChainIds = chainIds.filter((chainId) => {
-    const chain = chains[chainId];
-    return chain.expectedLegacyCommitments > 0 || chain.legacyMasterSeedNullifiedCount > 0;
-  });
-  const isFullyMigrated =
-    requiredChainIds.length === 0 || requiredChainIds.every((chainId) => chains[chainId].isMigrated);
+  const requiredChainIds = [...chainReadiness.keys()].filter((id) => chainReadiness.get(id)!.total > 0).sort();
+  const isFullyMigrated = requiredChainIds.every((id) => chains[id].isMigrated);
   const requiresMigration = requiredChainIds.length > 0 && !isFullyMigrated;
-  const migratedChainIds = requiredChainIds.filter((chainId) => chains[chainId].isMigrated);
-  const missingChainIds = requiredChainIds.filter((chainId) => !chains[chainId].isMigrated);
+  const migratedChainIds = requiredChainIds.filter((id) => chains[id].isMigrated);
+  const missingChainIds = requiredChainIds.filter((id) => !chains[id].isMigrated);
 
   return {
     chains,
@@ -140,9 +79,9 @@ export const buildMigrationReadinessSnapshot = (input: {
     migratedChainIds,
     missingChainIds,
     diagnostics: {
-      warnings,
-      legacyErrors: [...(legacyDiscovery.errors ?? [])],
-      upgradedErrors: [...(upgradedDiscovery.errors ?? [])],
+      warnings: [],
+      legacyErrors: [],
+      upgradedErrors: [],
     },
   };
 };
