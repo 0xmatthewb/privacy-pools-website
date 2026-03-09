@@ -108,7 +108,7 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
   const isBlocking =
     hasMigrationSession &&
     !isCompletingMigration &&
-    (hasStartedMigrationFlow || !migrationReadiness || requiresRealMigration);
+    (hasStartedMigrationFlow || (hasMigrationServices && !migrationReadiness) || requiresRealMigration);
 
   useEffect(() => {
     if (!runtime.isMigrationActive) return;
