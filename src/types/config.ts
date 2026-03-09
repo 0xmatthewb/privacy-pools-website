@@ -18,6 +18,7 @@ export interface Env {
 
   // New migration config
   IS_MIGRATION_ACTIVE: boolean;
+  SHOW_MIGRATION_BANNER: boolean;
   MIGRATION_RELAYER_URL: string;
 }
 
