@@ -23,14 +23,16 @@ export const useAdvancedView = () => {
 
   const isLoading = isLoadingExternalServices || isLoadingGlobalEvents;
 
-  // Ordered personal activity from newest to oldest
-  const orderedPersonalActivity = useMemo(
-    () =>
-      historyData
-        .filter((account) => account.scope === selectedPoolInfo.scope && account.chainId === chainId)
-        .sort((a, b) => b.timestamp - a.timestamp),
-    [historyData, selectedPoolInfo.scope, chainId],
-  );
+  // When a pool filter is active (from URL params), filter by that pool;
+  // otherwise show all personal activity across all pools.
+  const orderedPersonalActivity = useMemo(() => {
+    const filtered = poolFilter
+      ? historyData.filter(
+          (event) => event.scope?.toString() === poolFilter.scope && event.chainId === poolFilter.chainId,
+        )
+      : historyData;
+    return [...filtered].sort((a, b) => b.timestamp - a.timestamp);
+  }, [historyData, poolFilter]);
 
   // Filter pool accounts based on hideEmptyPools setting
   const filteredPoolAccounts = useMemo(() => {
