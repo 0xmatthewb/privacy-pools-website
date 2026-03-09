@@ -9,6 +9,7 @@ import { buildMigrationReadinessSnapshot } from '../state/buildMigrationReadines
 import { MigrationContextState } from '../types/migration';
 import { MIGRATION_MESSAGES } from '../utils/constants';
 import { executeMigrationFlow } from '../utils/executeMigrationFlow';
+import { fetchDeclinedLabels } from '../utils/fetchDeclinedLabels';
 import { useMigrationRelayer } from './useMigrationRelayer';
 
 interface MigrationContextValue extends MigrationContextState {
@@ -34,6 +35,9 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
   const isMigrationInFlightRef = useRef(false);
   const hasDeferredInvalidationRef = useRef(false);
 
+  const [migrationReadiness, setMigrationReadiness] = useState<MigrationContextState['migrationReadiness']>(null);
+  const declinedLabelsRef = useRef<Set<string>>(new Set());
+
   const resetMigrationFlowState = useCallback(() => {
     setFlowState('intro');
     setErrorMessage(null);
@@ -47,17 +51,41 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
   const hasMigrationServices = !!accountService && !!legacyAccountService;
   const canBuildMigrationReadiness = hasMigrationSession && hasMigrationServices;
 
-  const migrationReadiness = useMemo<MigrationContextState['migrationReadiness']>(() => {
+  useEffect(() => {
     if (!canBuildMigrationReadiness || !accountService || !legacyAccountService) {
-      return null;
+      setMigrationReadiness(null);
+      return;
     }
 
-    const readiness = buildMigrationReadinessSnapshot({
-      accountService,
-      legacyAccountService,
-    });
-    console.log('[migration] readiness', { readiness });
-    return readiness;
+    let cancelled = false;
+
+    const buildReadiness = async () => {
+      let declinedLabels: Set<string>;
+      try {
+        declinedLabels = await fetchDeclinedLabels(legacyAccountService);
+      } catch (err) {
+        console.warn('[migration] failed to fetch declined labels, proceeding without filtering:', err);
+        declinedLabels = new Set();
+      }
+
+      if (cancelled) return;
+
+      declinedLabelsRef.current = declinedLabels;
+
+      const readiness = buildMigrationReadinessSnapshot({
+        accountService,
+        legacyAccountService,
+        declinedLabels,
+      });
+      console.log('[migration] readiness', { readiness });
+      setMigrationReadiness(readiness);
+    };
+
+    buildReadiness();
+
+    return () => {
+      cancelled = true;
+    };
   }, [accountService, canBuildMigrationReadiness, legacyAccountService]);
 
   useEffect(() => {
@@ -140,6 +168,7 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
       await executeMigrationFlow({
         accountService,
         legacyAccountService,
+        declinedLabels: declinedLabelsRef.current,
         retryConfig: {
           maxRetries: runtime.maxRetries,
           initialBackoffMs: runtime.initialBackoffMs,

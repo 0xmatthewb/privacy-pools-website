@@ -32,6 +32,7 @@ const getPoolInfo = (chainId: number, scope: string): PoolInfo | null => {
 const extractLegacyCommitments = (
   legacyAccountService: AccountService,
   scopeToChainIndex: ReadonlyMap<string, number>,
+  declinedLabels?: Set<string>,
 ): LegacyCommitmentCandidate[] => {
   const accountState = (legacyAccountService as { account?: { poolAccounts?: Map<unknown, unknown[]> } })?.account;
   const poolAccounts = accountState?.poolAccounts;
@@ -69,6 +70,11 @@ const extractLegacyCommitments = (
         continue;
       }
 
+      // Skip rejected deposits — they cannot be migrated
+      if (commitmentLabel !== null && declinedLabels?.has(commitmentLabel.toString())) {
+        continue;
+      }
+
       const dedupeKey = `${chainId}-${scope}-${commitmentHash.toString()}-${commitmentLabel.toString()}`;
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
@@ -102,10 +108,15 @@ const toContextualError = (step: string, candidate: LegacyCommitmentCandidate, e
 export const buildMigrationProofs = async (input: {
   accountService: AccountService;
   legacyAccountService: AccountService;
+  declinedLabels?: Set<string>;
 }): Promise<MigrationProofBundle[]> => {
   const bundles: MigrationProofBundle[] = [];
   const scopeToChainIndex = createScopeToChainIndex();
-  const legacyCommitments = extractLegacyCommitments(input.legacyAccountService, scopeToChainIndex);
+  const legacyCommitments = extractLegacyCommitments(
+    input.legacyAccountService,
+    scopeToChainIndex,
+    input.declinedLabels,
+  );
   const buildAspMerkleProofs = createAspMerkleProofBuilder();
   const safeMasterKeys: MasterKeys = {
     masterNullifier: input.accountService.account.masterKeys[0],
