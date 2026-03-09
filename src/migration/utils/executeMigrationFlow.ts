@@ -14,6 +14,7 @@ interface MigrationRetryConfig {
 interface ExecuteMigrationFlowInput {
   accountService: AccountService;
   legacyAccountService: AccountService;
+  declinedLabels?: Set<string>;
   retryConfig: MigrationRetryConfig;
   submitMigration: (payloads: MigrationRelayerRequest) => Promise<MigrationRelayerResponse>;
   onRetry?: (retryCount: number) => void;
@@ -22,6 +23,7 @@ interface ExecuteMigrationFlowInput {
 export const executeMigrationFlow = async ({
   accountService,
   legacyAccountService,
+  declinedLabels,
   retryConfig,
   submitMigration,
   onRetry,
@@ -29,6 +31,7 @@ export const executeMigrationFlow = async ({
   const proofBundles = await buildMigrationProofs({
     accountService,
     legacyAccountService,
+    declinedLabels,
   });
 
   const initialPayloads = buildMulticallPayloads(proofBundles);

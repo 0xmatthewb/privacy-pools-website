@@ -21,8 +21,10 @@ const createEmptyMigrationReadinessSnapshot = (): MigrationReadinessSnapshot => 
 export const buildMigrationReadinessSnapshot = (input: {
   accountService: AccountService;
   legacyAccountService: AccountService;
+  declinedLabels?: Set<string>;
 }): MigrationReadinessSnapshot => {
   const scopeToChainIndex = createScopeToChainIndex();
+  const declinedLabels = input.declinedLabels ?? new Set<string>();
 
   const legacyPoolAccounts = input.legacyAccountService?.account?.poolAccounts;
   if (!(legacyPoolAccounts instanceof Map) || legacyPoolAccounts.size === 0) {
@@ -38,6 +40,15 @@ export const buildMigrationReadinessSnapshot = (input: {
 
     for (const pa of poolAccounts) {
       if (pa.ragequit) continue;
+
+      // Skip pool accounts with no spendable balance — nothing to migrate
+      const children = pa.children ?? [];
+      const commitment = children.length > 0 ? children[children.length - 1] : pa.deposit;
+      if (!commitment || commitment.value === null || commitment.value <= 0n) continue;
+
+      // Skip rejected deposits — they cannot be migrated
+      const label = pa.deposit?.label ?? pa.label;
+      if (label && declinedLabels.has(label.toString())) continue;
 
       const entry = chainReadiness.get(chainId) ?? { total: 0, migrated: 0, scopes: new Set<string>() };
       entry.scopes.add(normalizedScope);
