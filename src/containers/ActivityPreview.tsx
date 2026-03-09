@@ -11,15 +11,13 @@ import { InfoTooltip } from '~/components/InfoTooltip';
 import { allPoolsChainData, getConfig } from '~/config';
 import { ViewAllButton, ViewAllText } from '~/containers';
 import { useAccountContext, useAdvancedView } from '~/hooks';
-import { buildLegacyMigrationHistory } from '~/migration/utils/helpers';
-import { EventType, ReviewStatus } from '~/types';
 import { aspClient, ROUTER } from '~/utils';
 
 export const ActivityPreview = () => {
   const { push } = useRouter();
   const { address } = useAccount();
   const { previewGlobalEvents, isLoading } = useAdvancedView();
-  const { poolAccountsByChainScope, legacyAccountService } = useAccountContext();
+  const { historyData: allHistoryData } = useAccountContext();
 
   const [view, setView] = useState<'global' | 'personal' | 'stats'>('global');
 
@@ -118,60 +116,7 @@ export const ActivityPreview = () => {
     };
   }, [poolStatsQuery]);
 
-  // Build ALL personal activity from all pools (not filtered by selectedPoolInfo)
-  const allPersonalActivity = useMemo(() => {
-    const { history, migratedLabels } = buildLegacyMigrationHistory(legacyAccountService);
-
-    for (const poolAccounts of Object.values(poolAccountsByChainScope)) {
-      for (const pa of poolAccounts) {
-        const isMigrated = migratedLabels.has(String(pa.label));
-
-        if (!isMigrated) {
-          history.push({
-            type: EventType.DEPOSIT,
-            txHash: pa.deposit.txHash,
-            reviewStatus: pa.reviewStatus,
-            amount: pa.deposit.value,
-            timestamp: Number(pa.deposit.timestamp),
-            label: pa.label,
-            scope: pa.scope,
-            chainId: pa.chainId,
-          });
-        }
-
-        for (const [idx, child] of pa.children.entries()) {
-          if (isMigrated && child.hash === pa.deposit.hash) continue;
-
-          history.push({
-            type: EventType.WITHDRAWAL,
-            txHash: child.txHash,
-            reviewStatus: ReviewStatus.APPROVED,
-            amount: (idx === 0 ? pa.deposit.value : pa.children[idx - 1].value) - child.value,
-            timestamp: Number(child.timestamp),
-            label: child.label,
-            scope: pa.scope,
-            chainId: pa.chainId,
-          });
-        }
-      }
-
-      for (const { ragequit, scope, chainId } of poolAccounts) {
-        if (!ragequit?.transactionHash) continue;
-        history.push({
-          type: EventType.EXIT,
-          txHash: ragequit?.transactionHash,
-          reviewStatus: ReviewStatus.APPROVED,
-          amount: ragequit?.value,
-          timestamp: Number(ragequit?.timestamp),
-          label: ragequit?.label,
-          scope: scope,
-          chainId: chainId,
-        });
-      }
-    }
-
-    return history.sort((a, b) => b.timestamp - a.timestamp).slice(0, 6);
-  }, [poolAccountsByChainScope, legacyAccountService]);
+  const allPersonalActivity = useMemo(() => allHistoryData.slice(0, 6), [allHistoryData]);
 
   const historyData = view === 'global' ? previewGlobalEvents : allPersonalActivity;
 

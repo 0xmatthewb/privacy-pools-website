@@ -597,54 +597,56 @@ export const AccountProvider = ({ children }: Props) => {
   const historyData = useMemo(() => {
     const { history, migratedLabels } = buildLegacyMigrationHistory(legacyAccountServiceRef.current);
 
-    for (const pa of poolAccounts) {
-      const isMigrated = migratedLabels.has(String(pa.label));
+    for (const accounts of Object.values(poolAccountsByChainScope)) {
+      for (const pa of accounts) {
+        const isMigrated = migratedLabels.has(String(pa.label));
 
-      if (!isMigrated) {
-        history.push({
-          type: EventType.DEPOSIT,
-          txHash: pa.deposit.txHash,
-          reviewStatus: pa.reviewStatus,
-          amount: pa.deposit.value,
-          timestamp: Number(pa.deposit.timestamp),
-          label: pa.label,
-          scope: pa.scope,
-          chainId: pa.chainId,
-        });
+        if (!isMigrated) {
+          history.push({
+            type: EventType.DEPOSIT,
+            txHash: pa.deposit.txHash,
+            reviewStatus: pa.reviewStatus,
+            amount: pa.deposit.value,
+            timestamp: Number(pa.deposit.timestamp),
+            label: pa.label,
+            scope: pa.scope,
+            chainId: pa.chainId,
+          });
+        }
+
+        for (const [idx, child] of pa.children.entries()) {
+          if (isMigrated && child.hash === pa.deposit.hash) continue;
+
+          history.push({
+            type: EventType.WITHDRAWAL,
+            txHash: child.txHash,
+            reviewStatus: ReviewStatus.APPROVED,
+            amount: (idx === 0 ? pa.deposit.value : pa.children[idx - 1].value) - child.value,
+            timestamp: Number(child.timestamp),
+            label: child.label,
+            scope: pa.scope,
+            chainId: pa.chainId,
+          });
+        }
       }
 
-      for (const [idx, child] of pa.children.entries()) {
-        if (isMigrated && child.hash === pa.deposit.hash) continue;
-
+      for (const { ragequit, scope, chainId } of accounts) {
+        if (!ragequit?.transactionHash) continue;
         history.push({
-          type: EventType.WITHDRAWAL,
-          txHash: child.txHash,
+          type: EventType.EXIT,
+          txHash: ragequit?.transactionHash,
           reviewStatus: ReviewStatus.APPROVED,
-          amount: (idx === 0 ? pa.deposit.value : pa.children[idx - 1].value) - child.value,
-          timestamp: Number(child.timestamp),
-          label: child.label,
-          scope: pa.scope,
-          chainId: pa.chainId,
+          amount: ragequit?.value,
+          timestamp: Number(ragequit?.timestamp),
+          label: ragequit?.label,
+          scope: scope,
+          chainId: chainId,
         });
       }
-    }
-
-    for (const { ragequit, scope, chainId } of poolAccounts) {
-      if (!ragequit?.transactionHash) continue;
-      history.push({
-        type: EventType.EXIT,
-        txHash: ragequit?.transactionHash,
-        reviewStatus: ReviewStatus.APPROVED,
-        amount: ragequit?.value,
-        timestamp: Number(ragequit?.timestamp),
-        label: ragequit?.label,
-        scope: scope,
-        chainId: chainId,
-      });
     }
 
     return history.sort((a, b) => b.timestamp - a.timestamp);
-  }, [poolAccounts]);
+  }, [poolAccountsByChainScope]);
 
   return (
     <AccountContext.Provider
