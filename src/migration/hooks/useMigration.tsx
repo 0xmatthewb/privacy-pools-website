@@ -183,6 +183,7 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
   const contextValue = useMemo<MigrationContextValue>(() => {
     return {
       isActive: runtime.isMigrationActive,
+      showBanner: runtime.showMigrationBanner,
       isBlocking,
       flowState,
       errorMessage,
@@ -201,6 +202,7 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
     retryCount,
     runtime.isMigrationActive,
     runtime.maxRetries,
+    runtime.showMigrationBanner,
     startMigration,
   ]);
 

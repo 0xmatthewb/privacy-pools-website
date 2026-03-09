@@ -44,6 +44,7 @@ export interface MigrationProofBundle {
 
 export interface MigrationContextState {
   isActive: boolean;
+  showBanner: boolean;
   isBlocking: boolean;
   flowState: MigrationFlowState;
   errorMessage: string | null;

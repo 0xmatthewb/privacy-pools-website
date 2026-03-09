@@ -8,9 +8,9 @@ import { useMigration } from '../hooks/useMigration';
 const ANNOUNCEMENT_URL = 'https://0xbow.io';
 
 export const MigrationBanner = () => {
-  const { isActive } = useMigration();
+  const { showBanner } = useMigration();
 
-  if (!isActive) return null;
+  if (!showBanner) return null;
 
   return (
     <BannerRoot>
