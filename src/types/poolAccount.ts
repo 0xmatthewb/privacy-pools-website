@@ -16,6 +16,7 @@ export type PoolAccount = SDKPoolAccount & {
   chainId: number;
   scope: Hash;
   ragequit?: RagequitEventWithTimestamp;
+  isLegacy?: boolean;
 };
 
 export type HistoryData = {

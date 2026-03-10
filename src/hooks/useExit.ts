@@ -29,7 +29,7 @@ export const useExit = () => {
   const { setModalOpen, setIsClosable } = useModal();
   const { chainId, selectedPoolInfo } = useChainContext();
   const { poolAccount, setTransactionHash, proof, setProof } = usePoolAccountsContext();
-  const { seed, accountService, addRagequit } = useAccountContext();
+  const { seed, accountService, legacyAccountService, addRagequit } = useAccountContext();
   const { data: walletClient } = useWalletClient({ chainId });
   const publicClient = usePublicClient({ chainId });
   const [isLoading, setIsLoading] = useState(false);
@@ -166,7 +166,8 @@ export const useExit = () => {
       const ragequitProof = currentProof as RagequitProof;
 
       try {
-        if (!poolAccount || !accountService || !seed) throw new Error('Missing required data to exit');
+        const targetService = poolAccount?.isLegacy ? legacyAccountService : accountService;
+        if (!poolAccount || !targetService || !seed) throw new Error('Missing required data to exit');
 
         setIsClosable(false);
         setIsLoading(true);
@@ -250,7 +251,7 @@ export const useExit = () => {
             _value: bigint;
           };
 
-          addRagequit(accountService, {
+          addRagequit(targetService, {
             label: _label as Hash,
             ragequit: {
               ragequitter: _sender,
@@ -308,6 +309,7 @@ export const useExit = () => {
       proof,
       poolAccount,
       accountService,
+      legacyAccountService,
       seed,
       setIsClosable,
       setIsLoading,

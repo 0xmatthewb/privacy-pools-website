@@ -9,7 +9,6 @@ import { buildMigrationReadinessSnapshot } from '../state/buildMigrationReadines
 import { MigrationContextState } from '../types/migration';
 import { MIGRATION_MESSAGES } from '../utils/constants';
 import { executeMigrationFlow } from '../utils/executeMigrationFlow';
-import { fetchDeclinedLabels } from '../utils/fetchDeclinedLabels';
 import { useMigrationRelayer } from './useMigrationRelayer';
 
 interface MigrationContextValue extends MigrationContextState {
@@ -24,7 +23,7 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
   const { isConnected, isLogged, logout } = useAuthContext();
   const { addNotification } = useNotifications();
   const { setModalOpen, modalOpen, setIsClosable } = useModal();
-  const { accountService, legacyAccountService } = useAccountContext();
+  const { accountService, legacyAccountService, precomputedDeclinedLabels } = useAccountContext();
   const { submitMigration } = useMigrationRelayer();
   const goTo = useGoTo();
 
@@ -57,36 +56,18 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
       return;
     }
 
-    let cancelled = false;
+    if (!precomputedDeclinedLabels) return;
 
-    const buildReadiness = async () => {
-      let declinedLabels: Set<string>;
-      try {
-        declinedLabels = await fetchDeclinedLabels(legacyAccountService);
-      } catch (err) {
-        console.warn('[migration] failed to fetch declined labels, proceeding without filtering:', err);
-        declinedLabels = new Set();
-      }
+    declinedLabelsRef.current = precomputedDeclinedLabels;
 
-      if (cancelled) return;
-
-      declinedLabelsRef.current = declinedLabels;
-
-      const readiness = buildMigrationReadinessSnapshot({
-        accountService,
-        legacyAccountService,
-        declinedLabels,
-      });
-      console.log('[migration] readiness', { readiness });
-      setMigrationReadiness(readiness);
-    };
-
-    buildReadiness();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accountService, canBuildMigrationReadiness, legacyAccountService]);
+    const readiness = buildMigrationReadinessSnapshot({
+      accountService,
+      legacyAccountService,
+      declinedLabels: precomputedDeclinedLabels,
+    });
+    console.log('[migration] readiness', { readiness });
+    setMigrationReadiness(readiness);
+  }, [accountService, canBuildMigrationReadiness, legacyAccountService, precomputedDeclinedLabels]);
 
   useEffect(() => {
     const hasHardInvalidation =
