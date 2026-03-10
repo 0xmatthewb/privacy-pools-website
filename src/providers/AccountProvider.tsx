@@ -683,17 +683,18 @@ export const AccountProvider = ({ children }: Props) => {
         }
       }
 
-      for (const { ragequit, scope, chainId } of accounts) {
-        if (!ragequit?.transactionHash) continue;
+      for (const pa of accounts) {
+        if (!pa.ragequit?.transactionHash) continue;
+        if (migratedLabels.has(String(pa.label))) continue;
         history.push({
           type: EventType.EXIT,
-          txHash: ragequit?.transactionHash,
+          txHash: pa.ragequit.transactionHash,
           reviewStatus: ReviewStatus.APPROVED,
-          amount: ragequit?.value,
-          timestamp: Number(ragequit?.timestamp),
-          label: ragequit?.label,
-          scope: scope,
-          chainId: chainId,
+          amount: pa.ragequit.value,
+          timestamp: Number(pa.ragequit.timestamp),
+          label: pa.ragequit.label,
+          scope: pa.scope,
+          chainId: pa.chainId,
         });
       }
     }
