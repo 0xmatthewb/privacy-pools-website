@@ -15,8 +15,8 @@ export const getBackoffMs = (attempt: number, initialBackoffMs: number, maxBacko
 };
 
 /**
- * Builds history entries from legacy migrated pool accounts and returns
- * the set of labels that were migrated (to deduplicate in new account history).
+ * Builds history entries from legacy pool accounts (migrated and ragequitted)
+ * and returns a label set to deduplicate against the new-account history loop.
  */
 export const buildLegacyMigrationHistory = (
   legacyAccountService: AccountService | null,
@@ -36,47 +36,73 @@ export const buildLegacyMigrationHistory = (
     if (!resolvedChainId) continue;
 
     for (const legacyPa of legacyAccounts as SDKPoolAccount[]) {
-      if (!legacyPa.isMigrated || !legacyPa.deposit) continue;
+      if (!legacyPa.deposit) continue;
 
-      migratedLabels.add(String(legacyPa.label));
+      if (legacyPa.isMigrated) {
+        migratedLabels.add(String(legacyPa.label));
 
-      history.push({
-        type: EventType.DEPOSIT,
-        txHash: legacyPa.deposit.txHash,
-        reviewStatus: ReviewStatus.APPROVED,
-        amount: legacyPa.deposit.value,
-        timestamp: Number(legacyPa.deposit.timestamp ?? 0),
-        label: legacyPa.label as Hash,
-        scope: scope as Hash,
-        chainId: Number(resolvedChainId),
-      });
+        history.push({
+          type: EventType.DEPOSIT,
+          txHash: legacyPa.deposit.txHash,
+          reviewStatus: ReviewStatus.APPROVED,
+          amount: legacyPa.deposit.value,
+          timestamp: Number(legacyPa.deposit.timestamp ?? 0),
+          label: legacyPa.label as Hash,
+          scope: scope as Hash,
+          chainId: Number(resolvedChainId),
+        });
 
-      for (const [idx, child] of (legacyPa.children ?? []).entries()) {
-        const prevValue = idx === 0 ? legacyPa.deposit.value : legacyPa.children[idx - 1].value;
+        for (const [idx, child] of (legacyPa.children ?? []).entries()) {
+          const prevValue = idx === 0 ? legacyPa.deposit.value : legacyPa.children[idx - 1].value;
 
-        if (child.isMigration) {
-          history.push({
-            type: EventType.MIGRATION,
-            txHash: child.txHash,
-            reviewStatus: ReviewStatus.APPROVED,
-            amount: child.value,
-            timestamp: Number(child.timestamp ?? 0),
-            label: child.label as Hash,
-            scope: scope as Hash,
-            chainId: Number(resolvedChainId),
-          });
-        } else {
-          history.push({
-            type: EventType.WITHDRAWAL,
-            txHash: child.txHash,
-            reviewStatus: ReviewStatus.APPROVED,
-            amount: prevValue - child.value,
-            timestamp: Number(child.timestamp ?? 0),
-            label: child.label as Hash,
-            scope: scope as Hash,
-            chainId: Number(resolvedChainId),
-          });
+          if (child.isMigration) {
+            history.push({
+              type: EventType.MIGRATION,
+              txHash: child.txHash,
+              reviewStatus: ReviewStatus.APPROVED,
+              amount: child.value,
+              timestamp: Number(child.timestamp ?? 0),
+              label: child.label as Hash,
+              scope: scope as Hash,
+              chainId: Number(resolvedChainId),
+            });
+          } else {
+            history.push({
+              type: EventType.WITHDRAWAL,
+              txHash: child.txHash,
+              reviewStatus: ReviewStatus.APPROVED,
+              amount: prevValue - child.value,
+              timestamp: Number(child.timestamp ?? 0),
+              label: child.label as Hash,
+              scope: scope as Hash,
+              chainId: Number(resolvedChainId),
+            });
+          }
         }
+      } else if (legacyPa.ragequit) {
+        migratedLabels.add(String(legacyPa.label));
+
+        history.push({
+          type: EventType.DEPOSIT,
+          txHash: legacyPa.deposit.txHash,
+          reviewStatus: ReviewStatus.EXITED,
+          amount: legacyPa.deposit.value,
+          timestamp: Number(legacyPa.deposit.timestamp ?? 0),
+          label: legacyPa.label as Hash,
+          scope: scope as Hash,
+          chainId: Number(resolvedChainId),
+        });
+
+        history.push({
+          type: EventType.EXIT,
+          txHash: legacyPa.ragequit.transactionHash,
+          reviewStatus: ReviewStatus.APPROVED,
+          amount: legacyPa.ragequit.value,
+          timestamp: Number((legacyPa.ragequit as { timestamp?: bigint }).timestamp ?? 0),
+          label: legacyPa.ragequit.label as Hash,
+          scope: scope as Hash,
+          chainId: Number(resolvedChainId),
+        });
       }
     }
   }
@@ -104,6 +130,10 @@ export const resolveLegacyTimestamps = async (account: PrivacyPoolAccount): Prom
         if (!child.timestamp) {
           child.timestamp = await getTimestampFromBlockNumber(child.blockNumber, publicClient);
         }
+      }
+      const rq = pa.ragequit as { blockNumber?: bigint; timestamp?: bigint } | undefined;
+      if (rq?.blockNumber && !rq.timestamp) {
+        rq.timestamp = await getTimestampFromBlockNumber(rq.blockNumber, publicClient);
       }
     }
   }
