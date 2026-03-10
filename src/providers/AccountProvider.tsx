@@ -685,7 +685,7 @@ export const AccountProvider = ({ children }: Props) => {
 
       for (const pa of accounts) {
         if (!pa.ragequit?.transactionHash) continue;
-        if (migratedLabels.has(String(pa.label))) continue;
+        if (pa.isLegacy && migratedLabels.has(String(pa.label))) continue;
         history.push({
           type: EventType.EXIT,
           txHash: pa.ragequit.transactionHash,
