@@ -37,8 +37,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <p>This website requires JavaScript to function properly.</p>
               </NoScriptMessage>
 
-              <Header />
               <MaintenanceBanner />
+              <Header />
               <MainContent data-testid='main-content'>{children}</MainContent>
               <Footer />
             </PageWrapper>
