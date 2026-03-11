@@ -124,6 +124,7 @@ The application will be available at [http://localhost:3000](http://localhost:30
    ```
 
    You can also set environment variables through the Vercel dashboard:
+
    - Go to your project
    - Navigate to Settings > Environment Variables
    - Add all required variables from the table above
