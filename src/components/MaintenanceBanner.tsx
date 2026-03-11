@@ -5,7 +5,7 @@ import { Box, Typography, styled } from '@mui/material';
 const MAINTENANCE_MODE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === 'true';
 const MAINTENANCE_MESSAGE =
   process.env.NEXT_PUBLIC_MAINTENANCE_MESSAGE ||
-  'We are currently in maintenance mode. Withdrawals may be limited. Emergency exit remains available at all times.';
+  'We are currently in maintenance mode. Withdrawals may be limited. Exit remains available at all times.';
 
 export const MaintenanceBanner = () => {
   if (!MAINTENANCE_MODE) return null;
