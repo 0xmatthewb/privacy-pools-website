@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
-import { styled, Typography } from '@mui/material';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+import { alpha, styled, Typography } from '@mui/material';
 import { useMigration } from '../hooks/useMigration';
 
 const ANNOUNCEMENT_URL = 'https://0xbow.io';
@@ -14,11 +14,11 @@ export const MigrationBanner = () => {
 
   return (
     <BannerRoot>
-      <ShieldOutlinedIcon fontSize='small' />
+      <WarningAmberRoundedIcon fontSize='small' />
       <BannerText variant='body2'>
         We strengthened our key generation entropy.
         <AnnouncementLink href={ANNOUNCEMENT_URL} target='_blank' rel='noopener noreferrer'>
-          Read the announcement
+          Learn more
         </AnnouncementLink>
       </BannerText>
     </BannerRoot>
@@ -27,14 +27,14 @@ export const MigrationBanner = () => {
 
 const BannerRoot = styled('div')(({ theme }) => ({
   width: '100%',
-  backgroundColor: theme.palette.background.paper,
-  borderBottom: `1px solid ${theme.palette.divider}`,
+  backgroundColor: alpha(theme.palette.warning.main, 0.12),
+  borderBottom: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
   padding: '1.2rem 2rem',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: '1.6rem',
-  color: theme.palette.success.main,
+  gap: '1rem',
+  color: theme.palette.warning.main,
 }));
 
 const BannerText = styled(Typography)(({ theme }) => ({
@@ -45,7 +45,8 @@ const BannerText = styled(Typography)(({ theme }) => ({
 
 const AnnouncementLink = styled(Link)(({ theme }) => ({
   marginLeft: '0.6rem',
-  color: theme.palette.text.secondary,
+  color: theme.palette.warning.dark,
+  fontWeight: 600,
   textDecoration: 'underline',
   textUnderlineOffset: '0.3rem',
 }));
