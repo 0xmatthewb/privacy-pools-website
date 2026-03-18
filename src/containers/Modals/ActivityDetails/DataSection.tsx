@@ -62,7 +62,8 @@ export const DataSection = () => {
 
   const totalText = isDeposit ? formatUnits(originalAmount, decimals) : formatUnits(amountInWei, decimals);
   const totalUSD = getUsdBalance(price, totalText, decimals);
-  const valueText = `~${totalText.slice(0, 6)} ${assetSymbol} (~ ${totalUSD} USD)`;
+  const totalTruncated = totalText.slice(0, 6).replace(/\.$/, '');
+  const valueText = `~${totalTruncated} ${assetSymbol} (~ ${totalUSD} USD)`;
 
   // Use on-chain received amount for withdrawals if available
   const amountWithFee = isWithdrawal && actualReceivedAmount !== null ? actualReceivedAmount : originalAmount - fees;
