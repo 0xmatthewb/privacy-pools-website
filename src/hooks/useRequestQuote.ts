@@ -124,6 +124,7 @@ export const useRequestQuote = ({
       if (quoteState.extraGas && err instanceof Error && err.message.includes('UNSUPPORTED_FEATURE')) {
         addNotification('warning', 'Extra gas is not available for this chain. Requesting quote without it.');
         setExtraGas(false);
+        previousExtraGasRef.current = false;
         try {
           const retryInput = {
             chainId,

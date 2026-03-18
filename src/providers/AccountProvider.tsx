@@ -458,7 +458,17 @@ export const AccountProvider = ({ children }: Props) => {
   // Effect to process all deposits when poolAccountsByChainScope is first populated
   const hasProcessedInitialDepositsRef = useRef(false);
   const fetchAndProcessAllDepositsRef = useRef(fetchAndProcessAllDeposits);
+  const delayedRefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   fetchAndProcessAllDepositsRef.current = fetchAndProcessAllDeposits;
+
+  // Cleanup delayed refetch timer on unmount
+  useEffect(() => {
+    return () => {
+      if (delayedRefetchTimerRef.current) {
+        clearTimeout(delayedRefetchTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const scopeKeys = Object.keys(poolAccountsByChainScope);
@@ -494,9 +504,18 @@ export const AccountProvider = ({ children }: Props) => {
     await new Promise((resolve) => setTimeout(resolve, 3000));
     await fetchAndProcessDeposits();
 
+    // Clear any previous delayed refetch
+    if (delayedRefetchTimerRef.current) {
+      clearTimeout(delayedRefetchTimerRef.current);
+    }
     // Second refetch for slower updates
-    setTimeout(() => {
-      fetchAndProcessDeposits();
+    delayedRefetchTimerRef.current = setTimeout(() => {
+      try {
+        fetchAndProcessDeposits();
+      } catch (e) {
+        console.error('Delayed deposit refetch failed:', e);
+      }
+      delayedRefetchTimerRef.current = null;
     }, 10000);
   }, [fetchAndProcessDeposits, selectedPoolInfo.chainId]);
 
