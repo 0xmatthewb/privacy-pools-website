@@ -67,7 +67,7 @@ export const DataSection = () => {
 
   // Use on-chain received amount for withdrawals if available
   const amountWithFee = isWithdrawal && actualReceivedAmount !== null ? actualReceivedAmount : originalAmount - fees;
-  const amountWithFeeUSD = getUsdBalance(price, formatUnits(amountWithFee, decimals), decimals);
+  const amountWithFeeUSD = price ? getUsdBalance(price, formatUnits(amountWithFee, decimals), decimals) : null;
   const receivedText = isFeeLoading
     ? 'Loading...'
     : `${formatUnits(amountWithFee, decimals)} ${assetSymbol} (~ ${amountWithFeeUSD} USD)`;
