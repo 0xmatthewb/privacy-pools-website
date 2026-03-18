@@ -4,7 +4,7 @@ import { Stack, styled, Typography } from '@mui/material';
 import { formatUnits } from 'viem';
 import { ExtendedTooltip as Tooltip } from '~/components';
 import { useExternalServices, usePoolAccountsContext, useChainContext, useTransactionFee } from '~/hooks';
-import { EventType } from '~/types';
+import { EventType, GlobalEvent } from '~/types';
 import { formatDataNumber, formatTimestamp, getUsdBalance, truncateAddress } from '~/utils';
 
 export const DataSection = () => {
@@ -28,7 +28,12 @@ export const DataSection = () => {
   // const fromAddress = isDeposit ? selectedHistoryData?.address : '';
   // const toAddress = isDeposit ? '' : selectedHistoryData?.address;
 
-  const decimals = assetDecimals ?? balanceDecimals ?? 18;
+  const isGlobal = selectedHistoryData && 'pool' in selectedHistoryData;
+  const globalEvent = isGlobal ? (selectedHistoryData as unknown as GlobalEvent) : null;
+  const decimals = globalEvent
+    ? parseInt(globalEvent.pool.denomination, 10) || 18
+    : (assetDecimals ?? balanceDecimals ?? 18);
+  const assetSymbol = globalEvent ? globalEvent.pool.tokenSymbol : asset;
   const amountInWei = BigInt(selectedHistoryData?.amount ?? 0n);
 
   // Fetch actual fee from on-chain data for withdrawals
@@ -50,21 +55,21 @@ export const DataSection = () => {
 
   const feeFormatted = formatDataNumber(fees, decimals);
   const feeUSD = getUsdBalance(price, formatUnits(fees, decimals), decimals);
-  const feeText = isFeeLoading ? 'Loading...' : `${feeFormatted} ${asset} (~ ${feeUSD} USD)`;
+  const feeText = isFeeLoading ? 'Loading...' : `${feeFormatted} ${assetSymbol} (~ ${feeUSD} USD)`;
 
   const feesCollectorAddress = isDeposit ? entryPointAddress : currentSelectedRelayerData?.relayerAddress;
   const feesCollector = `OxBow (${truncateAddress(feesCollectorAddress ?? '0x')})`;
 
   const totalText = isDeposit ? formatUnits(originalAmount, decimals) : formatUnits(amountInWei, decimals);
   const totalUSD = getUsdBalance(price, totalText, decimals);
-  const valueText = `~${totalText.slice(0, 6)} ${asset} (~ ${totalUSD} USD)`;
+  const valueText = `~${totalText.slice(0, 6)} ${assetSymbol} (~ ${totalUSD} USD)`;
 
   // Use on-chain received amount for withdrawals if available
   const amountWithFee = isWithdrawal && actualReceivedAmount !== null ? actualReceivedAmount : originalAmount - fees;
   const amountWithFeeUSD = getUsdBalance(price, formatUnits(amountWithFee, decimals), decimals);
   const receivedText = isFeeLoading
     ? 'Loading...'
-    : `${formatUnits(amountWithFee, decimals)} ${asset} (~ ${amountWithFeeUSD} USD)`;
+    : `${formatUnits(amountWithFee, decimals)} ${assetSymbol} (~ ${amountWithFeeUSD} USD)`;
 
   // const poolAccountName = useMemo(() => {
   //   const name = poolAccounts.find((pool) => pool.label === selectedHistoryData?.commitment?.preimage?.label)?.name;

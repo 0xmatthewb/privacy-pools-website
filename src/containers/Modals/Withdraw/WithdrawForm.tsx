@@ -96,6 +96,12 @@ export const WithdrawForm = () => {
   const [anonymitySet, setAnonymitySet] = useState<number | null>(null);
   const [isLoadingAnonymitySet, setIsLoadingAnonymitySet] = useState(false);
 
+  // Reset minWithdrawAmount and anonymitySet when pool changes
+  useEffect(() => {
+    setMinWithdrawAmount(null);
+    setAnonymitySet(null);
+  }, [selectedPoolInfo?.scope]);
+
   // ENS-related state
   const [inputValue, setInputValue] = useState<string>(target);
   const [ensName, setEnsName] = useState<string | null>(null);

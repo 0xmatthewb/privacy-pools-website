@@ -59,7 +59,7 @@ export const DataSection = () => {
 
   useEffect(() => {
     const fetchPreview = async () => {
-      if (selectedAlternativeToken && publicClient && amount) {
+      if (isDeposit && selectedAlternativeToken && publicClient && amount) {
         try {
           const amountBN = parseUnits(amount, decimals);
           const preview = await getStakedTokenPreview(selectedAlternativeToken, amountBN, publicClient);
@@ -72,7 +72,7 @@ export const DataSection = () => {
       }
     };
     fetchPreview();
-  }, [selectedAlternativeToken, amount, decimals, publicClient]);
+  }, [isDeposit, selectedAlternativeToken, amount, decimals, publicClient]);
 
   // Add quote timer for withdrawals
   const amountBN = parseUnits(amount, decimals);

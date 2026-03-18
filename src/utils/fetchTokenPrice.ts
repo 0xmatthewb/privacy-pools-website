@@ -8,6 +8,7 @@ const options = { method: 'GET', headers: { accept: 'application/json' } };
 // These are USD-pegged stablecoins that should be ~$1
 const STABLECOIN_FALLBACK_PRICES: Record<string, number> = {
   USND: 1.0, // Nerite USD - redeemable for $1 worth of collateral
+  BSCUSD: 1.0, // BSC USD - USD-pegged stablecoin on BSC
 };
 
 // Uniswap V3 FXN/WETH pool on Ethereum mainnet
@@ -147,5 +148,8 @@ export const fetchTokenPrice = async (
   const response = await fetch(`${url}symbols=${tokenSymbol}`, options);
   const json = await response.json();
   const value = json.data?.[0]?.prices?.[0]?.value;
+  if (!value && STABLECOIN_FALLBACK_PRICES[tokenSymbol] !== undefined) {
+    return STABLECOIN_FALLBACK_PRICES[tokenSymbol];
+  }
   return value || 0;
 };

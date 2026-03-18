@@ -490,7 +490,14 @@ export const AccountProvider = ({ children }: Props) => {
     const clonedPoolAccounts = poolAccounts.map((pa) => ({ ...pa }));
     setPoolAccounts(clonedPoolAccounts);
 
-    fetchAndProcessDeposits();
+    // Delay to allow ASP to process the transaction
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await fetchAndProcessDeposits();
+
+    // Second refetch for slower updates
+    setTimeout(() => {
+      fetchAndProcessDeposits();
+    }, 10000);
   }, [fetchAndProcessDeposits, selectedPoolInfo.chainId]);
 
   const handleAddPoolAccount = useCallback(
