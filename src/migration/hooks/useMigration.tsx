@@ -65,7 +65,6 @@ export const MigrationProvider = ({ children }: { children: React.ReactNode }) =
       legacyAccountService,
       declinedLabels: precomputedDeclinedLabels,
     });
-    console.log('[migration] readiness', { readiness });
     setMigrationReadiness(readiness);
   }, [accountService, canBuildMigrationReadiness, legacyAccountService, precomputedDeclinedLabels]);
 

@@ -16,7 +16,6 @@ export const useMigrationRelayer = (): UseMigrationRelayerReturn => {
   const submitMigration = useCallback(
     async (payloads: MigrationRelayerRequest): Promise<MigrationRelayerResponse> => {
       if (runtime.useMockRelayer) {
-        console.log('[migration] calling the relayer with', { payloads });
         return mockMigrationRelayerClient(payloads);
       }
 

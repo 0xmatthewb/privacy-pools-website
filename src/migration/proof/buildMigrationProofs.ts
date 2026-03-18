@@ -97,7 +97,7 @@ const extractLegacyCommitments = (
 };
 
 const formatCandidateContext = (candidate: LegacyCommitmentCandidate): string => {
-  return `chainId=${candidate.chainId}, scope=${candidate.scope}, commitmentHash=${candidate.commitmentHash.toString()}, commitmentLabel=${candidate.commitmentLabel.toString()}`;
+  return `chainId=${candidate.chainId}, scope=${candidate.scope}`;
 };
 
 const toContextualError = (step: string, candidate: LegacyCommitmentCandidate, error: unknown): Error => {

@@ -49,7 +49,6 @@ export const executeMigrationFlow = async ({
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const response = await submitMigration(pendingPayloads);
-    console.log('[migration] response', { response });
 
     const failedTxIds = new Set(response.failed);
     const failedPayloads = pendingPayloads.filter((payload) => failedTxIds.has(String(payload.txId)));
