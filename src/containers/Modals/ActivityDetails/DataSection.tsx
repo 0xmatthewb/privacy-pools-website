@@ -53,9 +53,11 @@ export const DataSection = () => {
   const calculatedFees = (BigInt(feeBps) * BigInt(originalAmount)) / 100n / 100n;
   const fees = isWithdrawal && onChainFee !== null ? onChainFee : calculatedFees;
 
+  const usdSuffix = (usd: string | null) => (usd ? ` (~ ${usd} USD)` : ' (price unavailable)');
+
   const feeFormatted = formatDataNumber(fees, decimals);
   const feeUSD = price ? getUsdBalance(price, formatUnits(fees, decimals), decimals) : null;
-  const feeText = isFeeLoading ? 'Loading...' : `${feeFormatted} ${assetSymbol}${feeUSD ? ` (~ ${feeUSD} USD)` : ''}`;
+  const feeText = isFeeLoading ? 'Loading...' : `${feeFormatted} ${assetSymbol}${usdSuffix(feeUSD)}`;
 
   const feesCollectorAddress = isDeposit ? entryPointAddress : currentSelectedRelayerData?.relayerAddress;
   const feesCollector = `OxBow (${truncateAddress(feesCollectorAddress ?? '0x')})`;
@@ -63,14 +65,14 @@ export const DataSection = () => {
   const totalText = isDeposit ? formatUnits(originalAmount, decimals) : formatUnits(amountInWei, decimals);
   const totalUSD = price ? getUsdBalance(price, totalText, decimals) : null;
   const totalTruncated = totalText.slice(0, 6).replace(/\.$/, '');
-  const valueText = `~${totalTruncated} ${assetSymbol}${totalUSD ? ` (~ ${totalUSD} USD)` : ''}`;
+  const valueText = `~${totalTruncated} ${assetSymbol}${usdSuffix(totalUSD)}`;
 
   // Use on-chain received amount for withdrawals if available
   const amountWithFee = isWithdrawal && actualReceivedAmount !== null ? actualReceivedAmount : originalAmount - fees;
   const amountWithFeeUSD = price ? getUsdBalance(price, formatUnits(amountWithFee, decimals), decimals) : null;
   const receivedText = isFeeLoading
     ? 'Loading...'
-    : `${formatUnits(amountWithFee, decimals)} ${assetSymbol}${amountWithFeeUSD ? ` (~ ${amountWithFeeUSD} USD)` : ''}`;
+    : `${formatUnits(amountWithFee, decimals)} ${assetSymbol}${usdSuffix(amountWithFeeUSD)}`;
 
   // const poolAccountName = useMemo(() => {
   //   const name = poolAccounts.find((pool) => pool.label === selectedHistoryData?.commitment?.preimage?.label)?.name;
