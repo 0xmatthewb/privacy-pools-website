@@ -107,7 +107,7 @@ export const WithdrawForm = () => {
     if (target && isAddress(target)) {
       setTargetAddressHasError(false);
     }
-  }, [selectedAsset, target]);
+  }, [selectedPoolInfo?.asset, target]);
 
   // ENS-related state
   const [inputValue, setInputValue] = useState<string>(target);
