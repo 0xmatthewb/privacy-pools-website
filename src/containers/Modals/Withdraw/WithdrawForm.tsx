@@ -100,8 +100,14 @@ export const WithdrawForm = () => {
   useEffect(() => {
     setMinWithdrawAmount(null);
     setAnonymitySet(null);
-    setTargetAddressHasError(false);
   }, [selectedPoolInfo?.scope]);
+
+  // Re-validate target address when asset changes (handles switch-away-and-back to same token)
+  useEffect(() => {
+    if (target && isAddress(target)) {
+      setTargetAddressHasError(false);
+    }
+  }, [selectedAsset, target]);
 
   // ENS-related state
   const [inputValue, setInputValue] = useState<string>(target);
