@@ -9,6 +9,7 @@ import { MaintenanceBanner } from '~/components/MaintenanceBanner';
 import { ibm_plex_mono } from '~/config/fonts';
 import { Footer, Header, Modals } from '~/containers';
 import { NotificationContainer } from '~/containers/NotificationContainer';
+import { MigrationGate, MigrationProvider } from '~/migration';
 import { Providers } from '~/providers';
 
 const title = 'Privacy Pools - Anonymous & Compliant Payments';
@@ -29,21 +30,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <InitColorSchemeScript attribute='class' />
 
           <Providers>
-            <Suspense fallback={null}>
-              <FeatureFlagInitializer />
-            </Suspense>
-            <PageWrapper>
-              <NoScriptMessage>
-                <p>This website requires JavaScript to function properly.</p>
-              </NoScriptMessage>
+            <MigrationProvider>
+              <Suspense fallback={null}>
+                <FeatureFlagInitializer />
+              </Suspense>
+              <MigrationGate />
+              <PageWrapper>
+                <NoScriptMessage>
+                  <p>This website requires JavaScript to function properly.</p>
+                </NoScriptMessage>
 
-              <MaintenanceBanner />
-              <Header />
-              <MainContent data-testid='main-content'>{children}</MainContent>
-              <Footer />
-            </PageWrapper>
-            <NotificationContainer />
-            <Modals />
+                <MaintenanceBanner />
+                <Header />
+                <MainContent data-testid='main-content'>{children}</MainContent>
+                <Footer />
+              </PageWrapper>
+              <NotificationContainer />
+              <Modals />
+            </MigrationProvider>
           </Providers>
         </AppRouterCacheProvider>
       </body>

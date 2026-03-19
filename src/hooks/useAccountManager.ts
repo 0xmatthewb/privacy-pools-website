@@ -1,6 +1,7 @@
 'use client';
 
 import { RefObject, useCallback } from 'react';
+import { resolveLegacyTimestamps } from '~/migration/utils/helpers';
 import { AccountService, PoolAccount } from '~/types';
 import { createAccount as sdkCreateAccount, getPoolAccountsFromAccount, loadAccount as sdkLoadAccount } from '~/utils';
 
@@ -9,6 +10,7 @@ export function useAccountManager(
   setPoolAccounts: (poolAccounts: PoolAccount[]) => void,
   setPoolAccountsByChainScope: (poolAccountsByChainScope: Record<string, PoolAccount[]>) => void,
   accountServiceRef: RefObject<AccountService | null>,
+  legacyAccountServiceRef: RefObject<AccountService | null>,
   chainId: number,
 ) {
   const createAccount = useCallback(
@@ -18,12 +20,17 @@ export function useAccountManager(
       const _accountService = sdkCreateAccount(_seed);
       setSeed(_seed);
       accountServiceRef.current = _accountService;
+      legacyAccountServiceRef.current = null;
     },
-    [setSeed, accountServiceRef],
+    [setSeed, accountServiceRef, legacyAccountServiceRef],
   );
 
   const loadAccount = async (seed: string) => {
-    const { accountService: _accountService, errors } = await sdkLoadAccount(seed);
+    const {
+      accountService: _accountService,
+      legacyAccountService: _legacyAccountService,
+      errors,
+    } = await sdkLoadAccount(seed);
 
     // Log any errors that occurred during loading
     if (errors.length > 0) {
@@ -31,6 +38,15 @@ export function useAccountManager(
     }
 
     accountServiceRef.current = _accountService;
+    legacyAccountServiceRef.current = _legacyAccountService;
+
+    if (_legacyAccountService) {
+      try {
+        await resolveLegacyTimestamps(_legacyAccountService.account);
+      } catch (err) {
+        console.warn('Failed to resolve legacy timestamps (non-critical):', err);
+      }
+    }
 
     const { poolAccounts, poolAccountsByChainScope } = await getPoolAccountsFromAccount(
       _accountService.account,

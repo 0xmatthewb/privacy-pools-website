@@ -18,6 +18,13 @@ import { usePoolAccountsContext, useChainContext, useAccountContext } from '~/ho
 import { EventType, ReviewStatus } from '~/types';
 import { getTimeAgo, truncateAddress } from '~/utils';
 
+const eventTypeLabel: Record<EventType, string> = {
+  [EventType.MIGRATION]: 'Migration',
+  [EventType.WITHDRAWAL]: 'Withdraw',
+  [EventType.EXIT]: 'Exit',
+  [EventType.DEPOSIT]: 'Deposit',
+};
+
 export const WithdrawalsTable = () => {
   const {
     chain,
@@ -28,7 +35,9 @@ export const WithdrawalsTable = () => {
   const { historyData } = useAccountContext();
   const theme = useTheme();
   const rows = historyData.filter(
-    (row) => (row.type === EventType.WITHDRAWAL || row.type === EventType.EXIT) && row.label === poolAccount?.label,
+    (row) =>
+      (row.type === EventType.WITHDRAWAL || row.type === EventType.EXIT || row.type === EventType.MIGRATION) &&
+      row.label === poolAccount?.label,
   );
 
   return (
@@ -56,9 +65,7 @@ export const WithdrawalsTable = () => {
               {rows.map((row, index) => (
                 <STableRow key={row.txHash + index}>
                   {/* Action */}
-                  <STableCell sx={{ paddingLeft: 0 }}>
-                    {row.type === EventType.WITHDRAWAL ? 'Withdraw' : 'Exit'}
-                  </STableCell>
+                  <STableCell sx={{ paddingLeft: 0 }}>{eventTypeLabel[row.type]}</STableCell>
 
                   {/* Value */}
                   <STableCell>{formatUnits(row.amount as bigint, decimals)}</STableCell>
