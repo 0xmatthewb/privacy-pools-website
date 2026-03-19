@@ -5,7 +5,7 @@ import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import { alpha, styled, Typography } from '@mui/material';
 import { useMigration } from '../hooks/useMigration';
 
-const ANNOUNCEMENT_URL = 'https://0xbow.io';
+const announcementUrl = process.env.NEXT_PUBLIC_MIGRATION_ANNOUNCEMENT_URL;
 
 export const MigrationBanner = () => {
   const { showBanner } = useMigration();
@@ -17,9 +17,11 @@ export const MigrationBanner = () => {
       <WarningAmberRoundedIcon fontSize='small' />
       <BannerText variant='body2'>
         We strengthened our key generation entropy.
-        <AnnouncementLink href={ANNOUNCEMENT_URL} target='_blank' rel='noopener noreferrer'>
-          Learn more
-        </AnnouncementLink>
+        {announcementUrl && (
+          <AnnouncementLink href={announcementUrl} target='_blank' rel='noopener noreferrer'>
+            Learn more
+          </AnnouncementLink>
+        )}
       </BannerText>
     </BannerRoot>
   );
