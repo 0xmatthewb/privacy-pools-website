@@ -5,17 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.0] - 2026-03-19
 
-### Fixed
 
-- Replaced `bytesToNumber` with `bytesToBigInt` in the Privacy Pools SDK, restoring full 256-bit entropy for all newly generated keys and ensuring new accounts carry the full cryptographic security guarantees intended by the original specification
+## [2.12.0] - 2026-03-19
 
 ### Added
-
 - Introduced an entropy upgrade flow that allows existing users to easily upgrade their account security
-
-## [2.11.1] - 2026-03-19
 
 ### Fixed
 
@@ -31,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed target address not preserved when switching tokens in withdrawal form
 - Show 'price unavailable' instead of blank when price fetch fails
 - Added graceful fallback for unsupported extra gas on non-mainnet chains
+- Replaced `bytesToNumber` with `bytesToBigInt` in the Privacy Pools SDK, restoring full 256-bit entropy for all newly generated keys and ensuring new accounts carry the full cryptographic security guarantees intended by the original specification
 
 ## [2.11.0] - 2026-03-11
 
