@@ -14,6 +14,11 @@ const env: Env = {
   // HYPERSYNC_KEY removed from client-side for security
   SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN as string,
   SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN as string,
+
+  // New migration config
+  IS_MIGRATION_ACTIVE: process.env.NEXT_PUBLIC_IS_MIGRATION_ACTIVE === 'true',
+  SHOW_MIGRATION_BANNER: process.env.NEXT_PUBLIC_SHOW_MIGRATION_BANNER === 'true',
+  MIGRATION_RELAYER_URL: process.env.NEXT_PUBLIC_MIGRATION_RELAYER_URL ?? '',
 };
 
 export const getServerEnv = () => {

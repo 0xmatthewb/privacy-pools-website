@@ -13,7 +13,7 @@ import { ChainAssets, chainData } from '~/config';
 import { ibm_plex_mono } from '~/config/fonts';
 import { Section, PAContainer, ActionMenu, ChainTokenSelectorDropdown } from '~/containers';
 import { useAuthContext, useGoTo, useModal, useAccountContext, useChainContext } from '~/hooks';
-import { AllEventsResponse, EventType, ModalType, ReviewStatus } from '~/types';
+import { AllEventsResponse, ModalType, ReviewStatus } from '~/types';
 import { ROUTER, aspClient, fetchFxnPrice } from '~/utils';
 
 interface PoolPageProps {
@@ -130,8 +130,14 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   const publicClient = usePublicClient({ chainId: 1 }); // Mainnet for Uniswap FXN price
   const { setChainId, setSelectedAsset, price } = useChainContext();
   const accountContext = useAccountContext();
-  const { poolsByAssetAndChain, amountPoolAsset, hideEmptyPools, toggleHideEmptyPools, poolAccountsByChainScope } =
-    accountContext;
+  const {
+    poolsByAssetAndChain,
+    amountPoolAsset,
+    hideEmptyPools,
+    toggleHideEmptyPools,
+    poolAccountsByChainScope,
+    historyData,
+  } = accountContext;
   const { setModalOpen } = useModal();
   const { isLogged, isConnected, isAuthorized } = useAuthContext();
   const goTo = useGoTo();
@@ -289,58 +295,10 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   // Preview pool accounts (first 6 for display in PoolPage)
   const localPreviewPoolAccounts = useMemo(() => currentPoolAccounts.slice(0, 6), [currentPoolAccounts]);
 
-  // Build personal activity for this specific pool from poolAccountsByChainScope
-  // (same logic as historyData in AccountProvider but using cached pool accounts)
   const localPersonalActivity = useMemo(() => {
-    if (!poolScope) return [];
-
-    const key = `${parsedChainId}-${poolScope}`;
-    const accountsForThisPool = poolAccountsByChainScope[key] || [];
-
-    const history = [];
-
-    for (const pa of accountsForThisPool) {
-      history.push({
-        type: EventType.DEPOSIT,
-        txHash: pa.deposit.txHash,
-        reviewStatus: pa.reviewStatus,
-        amount: pa.deposit.value,
-        timestamp: Number(pa.deposit.timestamp),
-        label: pa.label,
-        scope: pa.scope,
-        chainId: pa.chainId,
-      });
-
-      for (const [idx, child] of pa.children.entries()) {
-        history.push({
-          type: EventType.WITHDRAWAL,
-          txHash: child.txHash,
-          reviewStatus: ReviewStatus.APPROVED,
-          amount: (idx === 0 ? pa.deposit.value : pa.children[idx - 1].value) - child.value,
-          timestamp: Number(child.timestamp),
-          label: child.label,
-          scope: pa.scope,
-          chainId: pa.chainId,
-        });
-      }
-    }
-
-    for (const { ragequit, scope, chainId } of accountsForThisPool) {
-      if (!ragequit?.transactionHash) continue;
-      history.push({
-        type: EventType.EXIT,
-        txHash: ragequit?.transactionHash,
-        reviewStatus: ReviewStatus.APPROVED,
-        amount: ragequit?.value,
-        timestamp: Number(ragequit?.timestamp),
-        label: ragequit?.label,
-        scope: scope,
-        chainId: chainId,
-      });
-    }
-
-    return history.sort((a, b) => b.timestamp - a.timestamp);
-  }, [poolAccountsByChainScope, parsedChainId, poolScope]);
+    if (!currentPoolInfo?.scope) return [];
+    return historyData.filter((event) => event.scope === currentPoolInfo.scope && event.chainId === parsedChainId);
+  }, [historyData, parsedChainId, currentPoolInfo?.scope]);
 
   // Preview personal activity (first 6 for display)
   const localPreviewPersonalActivity = useMemo(() => localPersonalActivity.slice(0, 6), [localPersonalActivity]);

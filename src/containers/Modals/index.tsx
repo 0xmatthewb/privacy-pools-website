@@ -1,4 +1,5 @@
 import { NewsletterSubscriptionModal } from '~/components';
+import { MigrationModal } from '~/migration';
 import { ActivityDetails } from './ActivityDetails';
 import { ConnectModal } from './Connect';
 import { DepositModal } from './Deposit';
@@ -23,6 +24,7 @@ export const Modals = () => {
       <SuccessModal />
       <GeneratingModal />
       <ConnectModal />
+      <MigrationModal />
       <NewsletterSubscriptionModal />
       <ExitConfirmModal />
       <SelfReportModal />

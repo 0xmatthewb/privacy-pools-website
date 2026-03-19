@@ -2,6 +2,7 @@ export enum EventType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
   EXIT = 'exit',
+  MIGRATION = 'migration',
 }
 
 export enum ReviewStatus {

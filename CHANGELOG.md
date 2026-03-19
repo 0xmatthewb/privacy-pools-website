@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-03-19
+
+### Fixed
+
+- Replaced `bytesToNumber` with `bytesToBigInt` in the Privacy Pools SDK, restoring full 256-bit entropy for all newly generated keys and ensuring new accounts carry the full cryptographic security guarantees intended by the original specification
+
+### Added
+
+- Introduced an entropy upgrade flow that allows existing users to easily upgrade their account security
+
+## [2.11.1] - 2026-03-19
+
+### Fixed
+
+- Fixed BNB withdrawal ASP root error (check externalAsp config instead of chainId)
+- Fixed incorrect amounts in global activity details modal
+- Fixed BSCUSD USD price display (added stablecoin fallback)
+- Fixed wallet client race condition on exit (refetch after chain switch)
+- Fixed review withdrawal button blocked after switching tokens
+- Fixed hide empty pools toggle disappearing when only pool is empty
+- Fixed pending vs approved status refresh delay after transactions
+- Fixed sUSDS withdrawal total received display
+- Fixed trailing dot in activity total display
+- Fixed target address not preserved when switching tokens in withdrawal form
+- Show 'price unavailable' instead of blank when price fetch fails
+- Added graceful fallback for unsupported extra gas on non-mainnet chains
+
+## [2.11.0] - 2026-03-11
+
+### Added
+
+- Environment-configurable maintenance banner (`NEXT_PUBLIC_MAINTENANCE_MODE`, `NEXT_PUBLIC_MAINTENANCE_MESSAGE`)
+
+### Fixed
+
+- Fixed incorrect pool scope passed to pool-incentives-stats endpoint
+
+## [2.10.2] - 2026-03-08
+
+### Fixed
+
+- Bumped SDK version to 1.1.1
+
+## [2.10.1] - 2026-02-19
+
+### Fixed
+
+- Fixed timeouts in RPC data fetching
+- Fixed pending values in pools dashboard
+
+## [2.10.0] - 2026-02-17
+
+### Added
+
+- Added BOLD pool support
+
+### Changed
+
+- Replaced staging relayer links with production ones
+
+## [2.9.2] - 2026-02-16
+
+### Fixed
+
+- Fixed approved deposits in withdrawal modal
+
 ## [2.9.1] - 2026-02-13
 
 ### Fixed
