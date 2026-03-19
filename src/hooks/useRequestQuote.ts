@@ -54,7 +54,7 @@ export const useRequestQuote = ({
   isRelayerSelected,
   addNotification,
 }: UseRequestQuoteParams): UseRequestQuoteReturn => {
-  const { quoteState, setQuoteData, updateCountdown, resetQuote, markAsExpired } = useQuoteContext();
+  const { quoteState, setQuoteData, updateCountdown, resetQuote, markAsExpired, setExtraGas } = useQuoteContext();
   const isFetchingRef = useRef(false);
   const previousExtraGasRef = useRef(quoteState.extraGas);
   const expiredNotificationSentRef = useRef<string | null>(null);
@@ -119,6 +119,42 @@ export const useRequestQuote = ({
         requestedAmount,
       );
     } catch (err) {
+      // If extraGas was requested but the relayer doesn't support it for this chain,
+      // automatically retry without extraGas
+      if (quoteState.extraGas && err instanceof Error && err.message.includes('UNSUPPORTED_FEATURE')) {
+        addNotification('warning', 'Extra gas is not available for this chain. Requesting quote without it.');
+        setExtraGas(false);
+        previousExtraGasRef.current = false;
+        try {
+          const retryInput = {
+            chainId,
+            amount: requestedAmount,
+            asset: assetAddress,
+            recipient,
+            extraGas: false,
+          };
+          const retryData = await getQuote(retryInput);
+          const remainingTime = calculateRemainingTime(retryData.feeCommitment.expiration);
+          expiredNotificationSentRef.current = null;
+          setQuoteData(
+            retryData.feeCommitment,
+            Number(retryData.feeBPS),
+            Number(retryData.baseFeeBPS),
+            retryData.detail?.extraGasFundAmount?.eth || null,
+            retryData.detail?.relayTxCost?.eth || null,
+            remainingTime,
+            requestedAmount,
+          );
+          return;
+        } catch (retryErr) {
+          const retryMessage = `Failed to get quote: ${retryErr instanceof Error ? retryErr.message : 'Unknown error'}`;
+          console.error('executeFetchAndSetQuote retry error:', retryErr);
+          addNotification('error', retryMessage);
+          resetQuote();
+          return;
+        }
+      }
+
       const errorMessage = `Failed to get quote: ${err instanceof Error ? err.message : 'Unknown error'}`;
       console.error('executeFetchAndSetQuote error:', err);
       addNotification('error', errorMessage);
@@ -137,6 +173,7 @@ export const useRequestQuote = ({
     addNotification,
     resetQuote,
     setQuoteData,
+    setExtraGas,
   ]);
 
   // Keep ref updated with latest function

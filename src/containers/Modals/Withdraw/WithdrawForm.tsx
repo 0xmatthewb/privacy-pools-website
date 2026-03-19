@@ -96,9 +96,23 @@ export const WithdrawForm = () => {
   const [anonymitySet, setAnonymitySet] = useState<number | null>(null);
   const [isLoadingAnonymitySet, setIsLoadingAnonymitySet] = useState(false);
 
+  // Reset state when pool changes
+  useEffect(() => {
+    setMinWithdrawAmount(null);
+    setAnonymitySet(null);
+  }, [selectedPoolInfo?.scope]);
+
   // ENS-related state
   const [inputValue, setInputValue] = useState<string>(target);
   const [ensName, setEnsName] = useState<string | null>(null);
+
+  // Restore target when cleared externally (e.g. by PoolAccountsProvider on asset change)
+  // but the user's inputValue still holds a valid address
+  useEffect(() => {
+    if (target === '' && inputValue && isAddress(inputValue)) {
+      setTarget(inputValue as Address);
+    }
+  }, [target, inputValue, setTarget]);
 
   // Clipboard for copying resolved address
   const { copied, copyToClipboard } = useClipboard({ timeout: 1400 });
