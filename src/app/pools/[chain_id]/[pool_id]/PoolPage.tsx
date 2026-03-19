@@ -239,15 +239,15 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   }, [isLogged, amountPoolAsset, poolDecimals]);
 
   const myFundsUsd = useMemo(() => {
-    return myFundsToken * (price || 0);
+    return price ? myFundsToken * price : null;
   }, [myFundsToken, price]);
 
   const acceptedFundsUsd = useMemo(() => {
-    return acceptedFundsToken * (price || 0);
+    return price ? acceptedFundsToken * price : null;
   }, [acceptedFundsToken, price]);
 
   const pendingFundsUsd = useMemo(() => {
-    return pendingFundsToken * (price || 0);
+    return price ? pendingFundsToken * price : null;
   }, [pendingFundsToken, price]);
 
   const totalDepositsCount = useMemo(() => {
@@ -321,7 +321,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   // Calculate user's earned FXN incentives using time-weighted share
   // This accounts for when each deposit was made relative to program start
   const userEarnedFxn = useMemo(() => {
-    if (!incentivesTimeline || !isLogged || acceptedFundsUsd === 0) {
+    if (!incentivesTimeline || !isLogged || !acceptedFundsUsd) {
       return { amount: 0, usdValue: 0 };
     }
 
@@ -356,7 +356,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
       const participationTimeMs = Math.max(0, participationEnd - participationStart);
 
       // Contribution = balance * time participated (in USD terms for weighting)
-      const balanceUsd = balanceToken * (price || 0);
+      const balanceUsd = balanceToken * (price ?? 0);
       userTimeWeightedContribution += balanceUsd * participationTimeMs;
     }
 
@@ -490,7 +490,9 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
           <Grid container>
             <StatsColumn item xs={12} sm={2.4}>
               <AcceptedFundsLabel>Accepted Funds</AcceptedFundsLabel>
-              <AcceptedFundsValue>${formatCompactNumber(acceptedFundsUsd)}</AcceptedFundsValue>
+              <AcceptedFundsValue>
+                {acceptedFundsUsd != null ? `$${formatCompactNumber(acceptedFundsUsd)}` : '-'}
+              </AcceptedFundsValue>
               <AcceptedFundsTokenAmount>
                 {formatCompactNumber(acceptedFundsToken)} {currentPoolInfo?.asset}
               </AcceptedFundsTokenAmount>
@@ -498,7 +500,9 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
 
             <StatsColumn item xs={12} sm={2.4}>
               <AcceptedFundsLabel>Pending Funds</AcceptedFundsLabel>
-              <AcceptedFundsValue>${formatCompactNumber(pendingFundsUsd)}</AcceptedFundsValue>
+              <AcceptedFundsValue>
+                {pendingFundsUsd != null ? `$${formatCompactNumber(pendingFundsUsd)}` : '-'}
+              </AcceptedFundsValue>
               <AcceptedFundsTokenAmount>
                 {formatCompactNumber(pendingFundsToken)} {currentPoolInfo?.asset}
               </AcceptedFundsTokenAmount>
@@ -511,7 +515,9 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
 
             <StatsColumn item xs={12} sm={2.4}>
               <AcceptedFundsLabel>My Funds</AcceptedFundsLabel>
-              <AcceptedFundsValue>${formatCompactNumber(myFundsUsd)}</AcceptedFundsValue>
+              <AcceptedFundsValue>
+                {myFundsUsd != null ? `$${formatCompactNumber(myFundsUsd)}` : '-'}
+              </AcceptedFundsValue>
               <AcceptedFundsTokenAmount>
                 {formatCompactNumber(myFundsToken)} {currentPoolInfo?.asset}
               </AcceptedFundsTokenAmount>
