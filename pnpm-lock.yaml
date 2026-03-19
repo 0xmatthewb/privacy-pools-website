@@ -17,8 +17,8 @@ importers:
   .:
     dependencies:
       '@0xbow/privacy-pools-core-sdk':
-        specifier: npm:@defi-wonderland/privacy-pools-core-sdk@1.1.5-snapshot.b0fc511
-        version: '@defi-wonderland/privacy-pools-core-sdk@1.1.5-snapshot.b0fc511(bufferutil@4.0.9)(utf-8-validate@5.0.10)(zod@3.22.4)'
+        specifier: 1.2.0
+        version: 1.2.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)(zod@3.22.4)
       '@carbon/icons-react':
         specifier: 11.52.0
         version: 11.52.0(react@19.2.3)
@@ -220,6 +220,9 @@ importers:
         version: 5.6.2
 
 packages:
+
+  '@0xbow/privacy-pools-core-sdk@1.2.0':
+    resolution: {integrity: sha512-yVB09z4AuYyKYhr+W0vOXno0d+w86LkYxXQ5LyOUEFhQVEPeuDI3gDLAQNYHM0pfp9JST7MhFS+EfYqU9wJBYQ==}
 
   '@adraffy/ens-normalize@1.10.1':
     resolution: {integrity: sha512-96Z2IP3mYmF1Xg2cDm8f1gWGf/HUVedQ3FMifV4kG/PQ4yEP51xDtRAEfhVNt5f/uzpNkZHwWQuUcu6D6K+Ekw==}
@@ -462,9 +465,6 @@ packages:
   '@defi-wonderland/crypto-husky-checks@1.5.6':
     resolution: {integrity: sha512-YvrAVALo/rckBUjHMJnbTrTORDxajXVQGKwFXHOqAZkbDeMcrUCzQ7fPQC94bk2XuGzpsVCVZEXX8beI1cFhOA==}
     hasBin: true
-
-  '@defi-wonderland/privacy-pools-core-sdk@1.1.5-snapshot.b0fc511':
-    resolution: {integrity: sha512-LfGQiTfqIKIQsD+t9Ng1m7k4sU1MHa5ByGcIo4n/4PtgzEP46wKMsbgIqa49bydT/UAZHn/wa7HTGYbLP77ACg==, tarball: https://npm.pkg.github.com/download/@defi-wonderland/privacy-pools-core-sdk/1.1.5-snapshot.b0fc511/8dd3198ae29609931ccc9480062564faebee0b6d}
 
   '@depay/solana-web3.js@1.98.2':
     resolution: {integrity: sha512-O7SvHsZ6HGXlzSmjhj7mj0B/VvQQn8mzm/xKQ0SUrEUJVxg9zKFBlwIvxCtgf+IOrWlBJi6VqXRu7UznWvfrCA==}
@@ -6808,6 +6808,21 @@ packages:
 
 snapshots:
 
+  '@0xbow/privacy-pools-core-sdk@1.2.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)(zod@3.22.4)':
+    dependencies:
+      '@types/snarkjs': 0.7.9
+      '@zk-kit/lean-imt': 2.2.4(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      async: 3.2.6
+      dotenv: 17.3.1
+      maci-crypto: 2.5.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      snarkjs: 0.7.5
+      typescript: 5.6.2
+      viem: 2.37.5(bufferutil@4.0.9)(typescript@5.6.2)(utf-8-validate@5.0.10)(zod@3.22.4)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+      - zod
+
   '@adraffy/ens-normalize@1.10.1': {}
 
   '@adraffy/ens-normalize@1.11.0': {}
@@ -7135,21 +7150,6 @@ snapshots:
       - supports-color
 
   '@defi-wonderland/crypto-husky-checks@1.5.6': {}
-
-  '@defi-wonderland/privacy-pools-core-sdk@1.1.5-snapshot.b0fc511(bufferutil@4.0.9)(utf-8-validate@5.0.10)(zod@3.22.4)':
-    dependencies:
-      '@types/snarkjs': 0.7.9
-      '@zk-kit/lean-imt': 2.2.4(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      async: 3.2.6
-      dotenv: 17.3.1
-      maci-crypto: 2.5.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      snarkjs: 0.7.5
-      typescript: 5.6.2
-      viem: 2.37.5(bufferutil@4.0.9)(typescript@5.6.2)(utf-8-validate@5.0.10)(zod@3.22.4)
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-      - zod
 
   '@depay/solana-web3.js@1.98.2':
     dependencies:
@@ -13056,7 +13056,7 @@ snapshots:
       whatwg-encoding: 2.0.0
       whatwg-mimetype: 3.0.0
       whatwg-url: 11.0.0
-      ws: 8.18.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       xml-name-validator: 4.0.0
     transitivePeerDependencies:
       - bufferutil
