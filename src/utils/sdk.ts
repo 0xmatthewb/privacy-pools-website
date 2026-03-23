@@ -217,7 +217,11 @@ export const createAccount = (seed: string) => {
 
 export const loadAccount = async (
   seed: string,
-): Promise<{ accountService: AccountService; errors: PoolEventsError[] }> => {
+): Promise<{
+  accountService: AccountService;
+  legacyAccountService: AccountService | null;
+  errors: PoolEventsError[];
+}> => {
   const result = await AccountService.initializeWithEvents(dataService, { mnemonic: seed }, pools);
 
   // Log any errors that occurred during event fetching
@@ -227,6 +231,7 @@ export const loadAccount = async (
 
   return {
     accountService: result.account,
+    legacyAccountService: result.legacyAccount ?? null,
     errors: result.errors,
   };
 };
@@ -300,6 +305,100 @@ export const addRagequit = async (
   },
 ) => {
   return accountService.addRagequitToAccount(ragequitParams.label, ragequitParams.ragequit);
+};
+
+/**
+ * Builds enriched PoolAccount objects for legacy deposits that were declined by the ASP.
+ * These are injected into poolAccountsByChainScope so users can exit (ragequit) them.
+ */
+export const buildDeclinedLegacyPoolAccounts = async (
+  legacyAccountService: AccountService | null,
+  declinedLabels: Set<string>,
+): Promise<Record<string, PoolAccount[]>> => {
+  const result: Record<string, PoolAccount[]> = {};
+
+  const legacyPoolAccounts = legacyAccountService?.account?.poolAccounts;
+  if (!(legacyPoolAccounts instanceof Map) || legacyPoolAccounts.size === 0 || declinedLabels.size === 0) {
+    return result;
+  }
+
+  const timestamps: Promise<void>[] = [];
+
+  for (const [_scope, accounts] of legacyPoolAccounts.entries()) {
+    if (!Array.isArray(accounts) || accounts.length === 0) continue;
+
+    const resolvedChainId = Object.keys(chainData).find((key) =>
+      chainData[Number(key)].poolInfo.some((pool) => pool.scope === _scope),
+    );
+    if (!resolvedChainId) continue;
+
+    const chainIdNum = Number(resolvedChainId);
+    const key = `${chainIdNum}-${_scope}`;
+    let idx = 1;
+
+    const publicClient = createPublicClient({
+      chain: whitelistedChains.find((chain) => chain.id === chainIdNum)!,
+      transport: transports[chainIdNum],
+    });
+
+    for (const pa of accounts) {
+      const label = pa.deposit?.label ?? pa.label;
+      if (!label || !declinedLabels.has(BigInt(label).toString())) {
+        idx++;
+        continue;
+      }
+
+      if ((pa as { isMigrated?: boolean }).isMigrated) {
+        idx++;
+        continue;
+      }
+
+      const lastCommitment = pa.children?.length > 0 ? pa.children[pa.children.length - 1] : pa.deposit;
+
+      const enriched: PoolAccount = {
+        ...(pa as PoolAccount),
+        balance: lastCommitment!.value,
+        lastCommitment: lastCommitment!,
+        reviewStatus: ReviewStatus.DECLINED,
+        isValid: false,
+        name: idx,
+        scope: _scope,
+        chainId: chainIdNum,
+        isLegacy: true,
+      };
+
+      if (enriched.ragequit) {
+        enriched.balance = 0n;
+        enriched.reviewStatus = ReviewStatus.EXITED;
+        timestamps.push(
+          getTimestampFromBlockNumber(enriched.ragequit.blockNumber, publicClient)
+            .then((ts) => {
+              enriched.ragequit!.timestamp = ts;
+            })
+            .catch(() => {
+              enriched.ragequit!.timestamp = 0n;
+            }),
+        );
+      }
+
+      timestamps.push(
+        getTimestampFromBlockNumber(pa.deposit.blockNumber, publicClient)
+          .then((ts) => {
+            enriched.deposit.timestamp = ts;
+          })
+          .catch(() => {
+            enriched.deposit.timestamp = 0n;
+          }),
+      );
+
+      result[key] = [...(result[key] || []), enriched];
+      idx++;
+    }
+  }
+
+  await Promise.all(timestamps);
+
+  return result;
 };
 
 export const getPoolAccountsFromAccount = async (account: PrivacyPoolAccount, chainId: number) => {

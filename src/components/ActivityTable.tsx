@@ -35,7 +35,7 @@ export const ActivityTable = ({
     balanceBN: { decimals, symbol },
     selectedPoolInfo: { assetDecimals },
   } = useChainContext();
-  const { poolAccounts } = useAccountContext();
+  const { poolAccounts, poolAccountsByChainScope } = useAccountContext();
   const { setSelectedHistoryData } = usePoolAccountsContext();
   const noRecordsMessage =
     view === 'personal' ? "Your activity will appear here when there's something to show." : 'No activity found';
@@ -84,8 +84,17 @@ export const ActivityTable = ({
   const isPersonalEvents = view === 'personal';
 
   const getPoolAccountName = (row: HistoryData[number]) => {
-    const poolAccount = poolAccounts.find((poolAccount) => poolAccount.label === row.label);
-    return isPersonalEvents ? (poolAccount ? `PA-${poolAccount.name}` : 'N/A') : 'N/A';
+    if (!isPersonalEvents) return 'N/A';
+
+    let poolAccount = poolAccounts.find((pa) => pa.label === row.label);
+
+    if (!poolAccount && 'scope' in row && 'chainId' in row) {
+      const key = `${row.chainId}-${row.scope}`;
+      const accounts = poolAccountsByChainScope[key] || [];
+      poolAccount = accounts.find((pa) => pa.label === row.label);
+    }
+
+    return poolAccount ? `PA-${poolAccount.name}` : 'N/A';
   };
 
   const rowHeight = 28.45;

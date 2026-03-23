@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+## [2.12.0] - 2026-03-19
+
+### Added
+- Introduced an entropy upgrade flow that allows existing users to easily upgrade their account security
+
+### Fixed
+
+- Fixed BNB withdrawal ASP root error (check externalAsp config instead of chainId)
+- Fixed incorrect amounts in global activity details modal
+- Fixed BSCUSD USD price display (added stablecoin fallback)
+- Fixed wallet client race condition on exit (refetch after chain switch)
+- Fixed review withdrawal button blocked after switching tokens
+- Fixed hide empty pools toggle disappearing when only pool is empty
+- Fixed pending vs approved status refresh delay after transactions
+- Fixed sUSDS withdrawal total received display
+- Fixed trailing dot in activity total display
+- Fixed target address not preserved when switching tokens in withdrawal form
+- Show 'price unavailable' instead of blank when price fetch fails
+- Added graceful fallback for unsupported extra gas on non-mainnet chains
+- Replaced `bytesToNumber` with `bytesToBigInt` in the Privacy Pools SDK, restoring full 256-bit entropy for all newly generated keys and ensuring new accounts carry the full cryptographic security guarantees intended by the original specification
+
 ## [2.11.0] - 2026-03-11
 
 ### Added

@@ -88,10 +88,10 @@ export const useWithdraw = () => {
   } = usePoolAccountsContext();
 
   const commitment = poolAccount?.lastCommitment;
-  // For chain 56 (BSC), merge ASP leaves from both 0xBow and Brevis sources, sorted ASC
-  // For other chains, use standard ASP leaves
+  // When pool has Brevis external ASP, merge ASP leaves from both 0xBow and Brevis sources, sorted ASC
+  // For other pools, use standard ASP leaves
   const aspLeaves =
-    chainId === 56
+    selectedPoolInfo?.externalAsp?.provider === 'brevis'
       ? mergeAndSortAspLeaves(aspData.mtLeavesData?.aspLeaves, aspData.mtLeavesData?.brevisAspLeaves)
       : aspData.mtLeavesData?.aspLeaves;
   const stateLeaves = aspData.mtLeavesData?.stateTreeLeaves;

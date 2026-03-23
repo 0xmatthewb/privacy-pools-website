@@ -4,7 +4,7 @@ import { formatUnits } from 'viem';
 import { ExtendedTooltip as Tooltip, StatusChip } from '~/components';
 import { getConstants } from '~/config/constants';
 import { useAccountContext, usePoolAccountsContext, useChainContext } from '~/hooks';
-import { ReviewStatus } from '~/types';
+import { GlobalEvent, ReviewStatus } from '~/types';
 import { getUsdBalance, getStatus } from '~/utils';
 
 export const Resume = () => {
@@ -17,10 +17,17 @@ export const Resume = () => {
     selectedPoolInfo: { assetDecimals, asset },
   } = useChainContext();
 
-  const decimals = assetDecimals ?? balanceDecimals ?? 18;
+  const isGlobal = selectedHistoryData && 'pool' in selectedHistoryData;
+  const globalEvent = isGlobal ? (selectedHistoryData as unknown as GlobalEvent) : null;
+  const decimals = globalEvent
+    ? parseInt(globalEvent.pool.denomination, 10) || 18
+    : (assetDecimals ?? balanceDecimals ?? 18);
+  const assetSymbol = globalEvent ? globalEvent.pool.tokenSymbol : asset;
 
   const amount = formatUnits(selectedHistoryData?.amount ?? 0n, decimals);
-  const usdBalance = getUsdBalance(price, formatUnits(selectedHistoryData?.amount ?? 0n, decimals), decimals);
+  const usdBalance = price
+    ? getUsdBalance(price, formatUnits(selectedHistoryData?.amount ?? 0n, decimals), decimals)
+    : null;
   const poolAccountName = useMemo(() => {
     const name = poolAccounts.find((pool) => pool.deposit.label === selectedHistoryData?.label)?.name;
     return name ? `PA-${name}` : 'Unknown Pool Account';
@@ -34,9 +41,9 @@ export const Resume = () => {
       <Stack direction='column' alignItems='start' gap='0.8rem'>
         <EthText variant='h6'>
           {amount}
-          <span>{asset}</span>
+          <span>{assetSymbol}</span>
         </EthText>
-        <BalanceUsd variant='body2'>{`~ ${usdBalance}`}</BalanceUsd>
+        {usdBalance && <BalanceUsd variant='body2'>{`~ ${usdBalance}`}</BalanceUsd>}
       </Stack>
 
       <Stack direction='column' alignItems='end' gap='1.4rem'>

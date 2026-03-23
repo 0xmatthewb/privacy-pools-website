@@ -5,7 +5,9 @@ import { addBreadcrumb, captureException, withScope } from '@sentry/nextjs';
 import { getAddress, TransactionExecutionError } from 'viem';
 import { generatePrivateKey } from 'viem/accounts';
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi';
+import { getPublicClient } from 'wagmi/actions';
 import { getConfig } from '~/config';
+import { config as wagmiConfig } from '~/config/wagmiConfig';
 import {
   useChainContext,
   useAccountContext,
@@ -29,8 +31,8 @@ export const useExit = () => {
   const { setModalOpen, setIsClosable } = useModal();
   const { chainId, selectedPoolInfo } = useChainContext();
   const { poolAccount, setTransactionHash, proof, setProof } = usePoolAccountsContext();
-  const { seed, accountService, addRagequit } = useAccountContext();
-  const { data: walletClient } = useWalletClient({ chainId });
+  const { seed, accountService, legacyAccountService, addRagequit } = useAccountContext();
+  const { data: walletClient, refetch: refetchWalletClient } = useWalletClient({ chainId });
   const publicClient = usePublicClient({ chainId });
   const [isLoading, setIsLoading] = useState(false);
   const { isSafeApp } = useSafeApp();
@@ -166,19 +168,25 @@ export const useExit = () => {
       const ragequitProof = currentProof as RagequitProof;
 
       try {
-        if (!poolAccount || !accountService || !seed) throw new Error('Missing required data to exit');
+        const targetService = poolAccount?.isLegacy ? legacyAccountService : accountService;
+        if (!poolAccount || !targetService || !seed) throw new Error('Missing required data to exit');
 
         setIsClosable(false);
         setIsLoading(true);
 
         // Always switch to the target chain to ensure wallet is on correct network
         // This fixes issues where wallet reports wrong chain ID even when showing correct network
+        let freshWalletClient = walletClient;
+        let freshPublicClient = publicClient;
         if (!isSafeApp) {
           await switchChainAsync({ chainId });
+          const { data: refetchedWalletClient } = await refetchWalletClient();
+          freshWalletClient = refetchedWalletClient ?? freshWalletClient;
+          freshPublicClient = getPublicClient(wagmiConfig, { chainId }) ?? freshPublicClient;
         }
 
         if (!TEST_MODE) {
-          if (!walletClient || !publicClient) throw new Error('Wallet or Public client not found');
+          if (!freshWalletClient || !freshPublicClient) throw new Error('Wallet or Public client not found');
 
           const transformedArgs = {
             pA: [BigInt(ragequitProof.proof.pi_a[0]), BigInt(ragequitProof.proof.pi_a[1])] as [bigint, bigint],
@@ -190,7 +198,7 @@ export const useExit = () => {
             pubSignals: ragequitProof.publicSignals.map((signal) => BigInt(signal)) as [bigint, bigint, bigint, bigint],
           };
 
-          const { request } = await publicClient
+          const { request } = await freshPublicClient
             .simulateContract({
               account: address,
               address: getAddress(selectedPoolInfo.address),
@@ -219,7 +227,7 @@ export const useExit = () => {
               throw err;
             });
 
-          let hash = await walletClient.writeContract(request);
+          let hash = await freshWalletClient.writeContract(request);
 
           // For Safe, we need to handle the transaction hash differently
           if (isSafeApp && hash.startsWith('0x') && hash.length === 66) {
@@ -235,7 +243,7 @@ export const useExit = () => {
           setTransactionHash(hash);
           setModalOpen(ModalType.PROCESSING);
 
-          const receipt = await publicClient?.waitForTransactionReceipt({
+          const receipt = await freshPublicClient?.waitForTransactionReceipt({
             hash,
             timeout: 300_000, // 5 minutes timeout for exit transactions
           });
@@ -250,7 +258,7 @@ export const useExit = () => {
             _value: bigint;
           };
 
-          addRagequit(accountService, {
+          addRagequit(targetService, {
             label: _label as Hash,
             ragequit: {
               ragequitter: _sender,
@@ -308,6 +316,7 @@ export const useExit = () => {
       proof,
       poolAccount,
       accountService,
+      legacyAccountService,
       seed,
       setIsClosable,
       setIsLoading,
@@ -315,6 +324,7 @@ export const useExit = () => {
       chainId,
       walletClient,
       publicClient,
+      refetchWalletClient,
       address,
       selectedPoolInfo,
       setTransactionHash,

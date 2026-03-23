@@ -5,11 +5,14 @@ import { chainData } from '~/config/chainData';
 import { getEnv } from '~/config/env';
 import { useChainContext, useExternalServices, useNotifications, usePoolAccountsContext } from '~/hooks';
 import { useAccountManager } from '~/hooks/useAccountManager';
+import { fetchDeclinedLabels } from '~/migration/utils/fetchDeclinedLabels';
+import { buildLegacyMigrationHistory } from '~/migration/utils/helpers';
 import { AccountService, DepositsByLabelResponse, EventType, PoolAccount, ReviewStatus, HistoryData } from '~/types';
 import {
   addPoolAccount,
   addWithdrawal,
   getPoolAccountsFromAccount,
+  buildDeclinedLegacyPoolAccounts,
   addRagequit,
   aspClient,
   mergeAndSortAspLeaves,
@@ -21,6 +24,7 @@ type ContextType = {
   seed: string | null;
   setSeed: Dispatch<SetStateAction<string | null>>;
   accountService: AccountService | null;
+  legacyAccountService: AccountService | null;
 
   poolAccounts: PoolAccount[];
   poolAccountsByChainScope: Record<string, PoolAccount[]>; // chainId-scope -> poolAccounts
@@ -41,6 +45,7 @@ type ContextType = {
   pendingAmountPoolAsset: bigint;
 
   historyData: HistoryData;
+  precomputedDeclinedLabels: Set<string> | null;
 
   hideEmptyPools: boolean;
   toggleHideEmptyPools: () => void;
@@ -55,11 +60,14 @@ export const AccountContext = createContext({} as ContextType);
 export const AccountProvider = ({ children }: Props) => {
   const [seed, setSeed] = useState<string | null>(null);
   const accountServiceRef = useRef<AccountService | null>(null);
+  const legacyAccountServiceRef = useRef<AccountService | null>(null);
   const [poolAccounts, setPoolAccounts] = useState<ContextType['poolAccounts']>([]);
   const [poolAccountsByChainScope, setPoolAccountsByChainScope] = useState<ContextType['poolAccountsByChainScope']>({});
   const [isLoading, setIsLoading] = useState(false);
   const [hideEmptyPools, setHideEmptyPools] = useState(false);
   const [hasProcessedInitialDeposits, setHasProcessedInitialDeposits] = useState(false);
+  const declinedLabelsRef = useRef<Set<string>>(new Set());
+  const [precomputedDeclinedLabels, setPrecomputedDeclinedLabels] = useState<Set<string> | null>(null);
   const { selectedPoolInfo } = useChainContext();
   const { addNotification } = useNotifications();
   const {
@@ -72,6 +80,7 @@ export const AccountProvider = ({ children }: Props) => {
     setPoolAccounts,
     setPoolAccountsByChainScope,
     accountServiceRef,
+    legacyAccountServiceRef,
     selectedPoolInfo.chainId,
   );
 
@@ -448,6 +457,34 @@ export const AccountProvider = ({ children }: Props) => {
 
       await loadAccount(seed);
 
+      if (legacyAccountServiceRef.current) {
+        try {
+          const labels = await fetchDeclinedLabels(legacyAccountServiceRef.current);
+          declinedLabelsRef.current = labels;
+          setPrecomputedDeclinedLabels(labels);
+
+          if (labels.size > 0) {
+            const legacyPAs = await buildDeclinedLegacyPoolAccounts(legacyAccountServiceRef.current, labels);
+            setPoolAccountsByChainScope((prev) => {
+              const merged = { ...prev };
+              for (const [key, accounts] of Object.entries(legacyPAs)) {
+                const existing = merged[key] || [];
+                const existingLabels = new Set(existing.map((pa) => pa.label?.toString()));
+                const newAccounts = accounts.filter((pa) => !existingLabels.has(pa.label?.toString()));
+                merged[key] = [...existing, ...newAccounts];
+              }
+              return merged;
+            });
+          }
+        } catch (err) {
+          console.warn('[migration] failed to build declined legacy pool accounts:', err);
+          declinedLabelsRef.current = new Set();
+          setPrecomputedDeclinedLabels(new Set());
+        }
+      } else {
+        setPrecomputedDeclinedLabels(new Set());
+      }
+
       // Small delay to ensure poolAccountsByChainScope state is updated
       // before we process deposits for all scopes
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -458,7 +495,17 @@ export const AccountProvider = ({ children }: Props) => {
   // Effect to process all deposits when poolAccountsByChainScope is first populated
   const hasProcessedInitialDepositsRef = useRef(false);
   const fetchAndProcessAllDepositsRef = useRef(fetchAndProcessAllDeposits);
+  const delayedRefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   fetchAndProcessAllDepositsRef.current = fetchAndProcessAllDeposits;
+
+  // Cleanup delayed refetch timer on unmount
+  useEffect(() => {
+    return () => {
+      if (delayedRefetchTimerRef.current) {
+        clearTimeout(delayedRefetchTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const scopeKeys = Object.keys(poolAccountsByChainScope);
@@ -484,13 +531,47 @@ export const AccountProvider = ({ children }: Props) => {
       clonedPoolAccountsByChainScope[key] = accounts.map((pa) => ({ ...pa }));
     }
 
+    // Merge declined legacy pool accounts so they remain visible for exit
+    if (legacyAccountServiceRef.current && declinedLabelsRef.current.size > 0) {
+      try {
+        const legacyPAs = await buildDeclinedLegacyPoolAccounts(
+          legacyAccountServiceRef.current,
+          declinedLabelsRef.current,
+        );
+        for (const [key, accounts] of Object.entries(legacyPAs)) {
+          const existing = clonedPoolAccountsByChainScope[key] || [];
+          const existingLabels = new Set(existing.map((pa) => pa.label?.toString()));
+          const newAccounts = accounts.filter((pa) => !existingLabels.has(pa.label?.toString()));
+          clonedPoolAccountsByChainScope[key] = [...existing, ...newAccounts];
+        }
+      } catch (err) {
+        console.warn('[migration] failed to rebuild declined legacy pool accounts:', err);
+      }
+    }
+
     setPoolAccountsByChainScope(clonedPoolAccountsByChainScope);
 
     // Also clone poolAccounts to maintain consistency and avoid shared references
     const clonedPoolAccounts = poolAccounts.map((pa) => ({ ...pa }));
     setPoolAccounts(clonedPoolAccounts);
 
-    fetchAndProcessDeposits();
+    // Delay to allow ASP to process the transaction
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await fetchAndProcessDeposits();
+
+    // Clear any previous delayed refetch
+    if (delayedRefetchTimerRef.current) {
+      clearTimeout(delayedRefetchTimerRef.current);
+    }
+    // Second refetch for slower updates
+    delayedRefetchTimerRef.current = setTimeout(() => {
+      try {
+        fetchAndProcessDeposits();
+      } catch (e) {
+        console.error('Delayed deposit refetch failed:', e);
+      }
+      delayedRefetchTimerRef.current = null;
+    }, 10000);
   }, [fetchAndProcessDeposits, selectedPoolInfo.chainId]);
 
   const handleAddPoolAccount = useCallback(
@@ -522,8 +603,11 @@ export const AccountProvider = ({ children }: Props) => {
     setPoolAccountsByChainScope({});
     setSeed(null);
     accountServiceRef.current = null;
+    legacyAccountServiceRef.current = null;
     hasProcessedInitialDepositsRef.current = false;
     setHasProcessedInitialDeposits(false);
+    declinedLabelsRef.current = new Set();
+    setPrecomputedDeclinedLabels(null);
   };
 
   const toggleHideEmptyPools = useCallback(() => {
@@ -590,50 +674,59 @@ export const AccountProvider = ({ children }: Props) => {
   }, [aspError, addNotification]);
 
   const historyData = useMemo(() => {
-    const history = [];
+    const { history, migratedLabels } = buildLegacyMigrationHistory(legacyAccountServiceRef.current);
 
-    for (const pa of poolAccounts) {
-      history.push({
-        type: EventType.DEPOSIT,
-        txHash: pa.deposit.txHash,
-        reviewStatus: pa.reviewStatus,
-        amount: pa.deposit.value,
-        timestamp: Number(pa.deposit.timestamp),
-        label: pa.label,
-        scope: pa.scope,
-        chainId: pa.chainId,
-      });
+    for (const accounts of Object.values(poolAccountsByChainScope)) {
+      for (const pa of accounts) {
+        const isMigrated = migratedLabels.has(String(pa.label));
 
-      for (const [idx, child] of pa.children.entries()) {
+        if (!isMigrated) {
+          history.push({
+            type: EventType.DEPOSIT,
+            txHash: pa.deposit.txHash,
+            reviewStatus: pa.reviewStatus,
+            amount: pa.deposit.value,
+            timestamp: Number(pa.deposit.timestamp),
+            label: pa.label,
+            scope: pa.scope,
+            chainId: pa.chainId,
+          });
+        }
+
+        for (const [idx, child] of pa.children.entries()) {
+          if (isMigrated && child.hash === pa.deposit.hash) continue;
+
+          history.push({
+            type: EventType.WITHDRAWAL,
+            txHash: child.txHash,
+            reviewStatus: ReviewStatus.APPROVED,
+            amount: (idx === 0 ? pa.deposit.value : pa.children[idx - 1].value) - child.value,
+            timestamp: Number(child.timestamp),
+            label: child.label,
+            scope: pa.scope,
+            chainId: pa.chainId,
+          });
+        }
+      }
+
+      for (const pa of accounts) {
+        if (!pa.ragequit?.transactionHash) continue;
+        if (pa.isLegacy && migratedLabels.has(String(pa.label))) continue;
         history.push({
-          type: EventType.WITHDRAWAL,
-          txHash: child.txHash,
+          type: EventType.EXIT,
+          txHash: pa.ragequit.transactionHash,
           reviewStatus: ReviewStatus.APPROVED,
-          amount: (idx === 0 ? pa.deposit.value : pa.children[idx - 1].value) - child.value,
-          timestamp: Number(child.timestamp),
-          label: child.label,
+          amount: pa.ragequit.value,
+          timestamp: Number(pa.ragequit.timestamp),
+          label: pa.ragequit.label,
           scope: pa.scope,
           chainId: pa.chainId,
         });
       }
     }
 
-    for (const { ragequit, scope, chainId } of poolAccounts) {
-      if (!ragequit?.transactionHash) continue;
-      history.push({
-        type: EventType.EXIT,
-        txHash: ragequit?.transactionHash,
-        reviewStatus: ReviewStatus.APPROVED,
-        amount: ragequit?.value,
-        timestamp: Number(ragequit?.timestamp),
-        label: ragequit?.label,
-        scope: scope,
-        chainId: chainId,
-      });
-    }
-
     return history.sort((a, b) => b.timestamp - a.timestamp);
-  }, [poolAccounts]);
+  }, [poolAccountsByChainScope]);
 
   return (
     <AccountContext.Provider
@@ -649,6 +742,7 @@ export const AccountProvider = ({ children }: Props) => {
         pendingAmountPoolAsset,
         seed,
         accountService: accountServiceRef.current,
+        legacyAccountService: legacyAccountServiceRef.current,
         setSeed,
         createAccount,
         loadAccount: handleLoadAccount,
@@ -657,6 +751,7 @@ export const AccountProvider = ({ children }: Props) => {
         addRagequit: handleAddRagequit,
         resetGlobalState,
         historyData,
+        precomputedDeclinedLabels,
         hideEmptyPools,
         toggleHideEmptyPools,
       }}

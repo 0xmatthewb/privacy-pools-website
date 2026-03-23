@@ -160,6 +160,10 @@ export const AllPoolAccountsPreview = () => {
 
   const hasAnyPools = poolsWithAccounts.length > 0;
 
+  const hasAnyPoolAccounts = useMemo(() => {
+    return Object.values(poolAccountsByChainScope).some((accounts) => accounts.length > 0);
+  }, [poolAccountsByChainScope]);
+
   const handleShowEmptyPools = () => {
     toggleHideEmptyPools();
   };
@@ -217,14 +221,14 @@ export const AllPoolAccountsPreview = () => {
               width='100%'
               justifyContent='flex-end'
             >
-              {hasAnyPools && (
-                <ViewAllButton onClick={handleShowEmptyPools} disabled={!hasAnyPools}>
+              {hasAnyPoolAccounts && (
+                <ViewAllButton onClick={handleShowEmptyPools} disabled={!hasAnyPoolAccounts}>
                   <ViewAllText>{hideEmptyPools ? 'Show' : 'Hide'} empty pools</ViewAllText>
                 </ViewAllButton>
               )}
 
-              {isAuthorized && hasAnyPools && (
-                <ViewAllButton onClick={handleNavigateToPoolAccounts} disabled={!hasAnyPools}>
+              {isAuthorized && hasAnyPoolAccounts && (
+                <ViewAllButton onClick={handleNavigateToPoolAccounts} disabled={!hasAnyPoolAccounts}>
                   <ViewAllText>View All</ViewAllText>
                 </ViewAllButton>
               )}

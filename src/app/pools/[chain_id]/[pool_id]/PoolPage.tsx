@@ -13,7 +13,7 @@ import { ChainAssets, chainData } from '~/config';
 import { ibm_plex_mono } from '~/config/fonts';
 import { Section, PAContainer, ActionMenu, ChainTokenSelectorDropdown } from '~/containers';
 import { useAuthContext, useGoTo, useModal, useAccountContext, useChainContext } from '~/hooks';
-import { AllEventsResponse, EventType, ModalType, ReviewStatus } from '~/types';
+import { AllEventsResponse, ModalType, ReviewStatus } from '~/types';
 import { ROUTER, aspClient, fetchFxnPrice } from '~/utils';
 
 interface PoolPageProps {
@@ -130,8 +130,14 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   const publicClient = usePublicClient({ chainId: 1 }); // Mainnet for Uniswap FXN price
   const { setChainId, setSelectedAsset, price } = useChainContext();
   const accountContext = useAccountContext();
-  const { poolsByAssetAndChain, amountPoolAsset, hideEmptyPools, toggleHideEmptyPools, poolAccountsByChainScope } =
-    accountContext;
+  const {
+    poolsByAssetAndChain,
+    amountPoolAsset,
+    hideEmptyPools,
+    toggleHideEmptyPools,
+    poolAccountsByChainScope,
+    historyData,
+  } = accountContext;
   const { setModalOpen } = useModal();
   const { isLogged, isConnected, isAuthorized } = useAuthContext();
   const goTo = useGoTo();
@@ -233,15 +239,15 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   }, [isLogged, amountPoolAsset, poolDecimals]);
 
   const myFundsUsd = useMemo(() => {
-    return myFundsToken * (price || 0);
+    return price ? myFundsToken * price : null;
   }, [myFundsToken, price]);
 
   const acceptedFundsUsd = useMemo(() => {
-    return acceptedFundsToken * (price || 0);
+    return price ? acceptedFundsToken * price : null;
   }, [acceptedFundsToken, price]);
 
   const pendingFundsUsd = useMemo(() => {
-    return pendingFundsToken * (price || 0);
+    return price ? pendingFundsToken * price : null;
   }, [pendingFundsToken, price]);
 
   const totalDepositsCount = useMemo(() => {
@@ -289,58 +295,10 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   // Preview pool accounts (first 6 for display in PoolPage)
   const localPreviewPoolAccounts = useMemo(() => currentPoolAccounts.slice(0, 6), [currentPoolAccounts]);
 
-  // Build personal activity for this specific pool from poolAccountsByChainScope
-  // (same logic as historyData in AccountProvider but using cached pool accounts)
   const localPersonalActivity = useMemo(() => {
-    if (!poolScope) return [];
-
-    const key = `${parsedChainId}-${poolScope}`;
-    const accountsForThisPool = poolAccountsByChainScope[key] || [];
-
-    const history = [];
-
-    for (const pa of accountsForThisPool) {
-      history.push({
-        type: EventType.DEPOSIT,
-        txHash: pa.deposit.txHash,
-        reviewStatus: pa.reviewStatus,
-        amount: pa.deposit.value,
-        timestamp: Number(pa.deposit.timestamp),
-        label: pa.label,
-        scope: pa.scope,
-        chainId: pa.chainId,
-      });
-
-      for (const [idx, child] of pa.children.entries()) {
-        history.push({
-          type: EventType.WITHDRAWAL,
-          txHash: child.txHash,
-          reviewStatus: ReviewStatus.APPROVED,
-          amount: (idx === 0 ? pa.deposit.value : pa.children[idx - 1].value) - child.value,
-          timestamp: Number(child.timestamp),
-          label: child.label,
-          scope: pa.scope,
-          chainId: pa.chainId,
-        });
-      }
-    }
-
-    for (const { ragequit, scope, chainId } of accountsForThisPool) {
-      if (!ragequit?.transactionHash) continue;
-      history.push({
-        type: EventType.EXIT,
-        txHash: ragequit?.transactionHash,
-        reviewStatus: ReviewStatus.APPROVED,
-        amount: ragequit?.value,
-        timestamp: Number(ragequit?.timestamp),
-        label: ragequit?.label,
-        scope: scope,
-        chainId: chainId,
-      });
-    }
-
-    return history.sort((a, b) => b.timestamp - a.timestamp);
-  }, [poolAccountsByChainScope, parsedChainId, poolScope]);
+    if (!currentPoolInfo?.scope) return [];
+    return historyData.filter((event) => event.scope === currentPoolInfo.scope && event.chainId === parsedChainId);
+  }, [historyData, parsedChainId, currentPoolInfo?.scope]);
 
   // Preview personal activity (first 6 for display)
   const localPreviewPersonalActivity = useMemo(() => localPersonalActivity.slice(0, 6), [localPersonalActivity]);
@@ -363,7 +321,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
   // Calculate user's earned FXN incentives using time-weighted share
   // This accounts for when each deposit was made relative to program start
   const userEarnedFxn = useMemo(() => {
-    if (!incentivesTimeline || !isLogged || acceptedFundsUsd === 0) {
+    if (!incentivesTimeline || !isLogged || !acceptedFundsUsd) {
       return { amount: 0, usdValue: 0 };
     }
 
@@ -398,7 +356,7 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
       const participationTimeMs = Math.max(0, participationEnd - participationStart);
 
       // Contribution = balance * time participated (in USD terms for weighting)
-      const balanceUsd = balanceToken * (price || 0);
+      const balanceUsd = balanceToken * (price ?? 0);
       userTimeWeightedContribution += balanceUsd * participationTimeMs;
     }
 
@@ -532,7 +490,9 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
           <Grid container>
             <StatsColumn item xs={12} sm={2.4}>
               <AcceptedFundsLabel>Accepted Funds</AcceptedFundsLabel>
-              <AcceptedFundsValue>${formatCompactNumber(acceptedFundsUsd)}</AcceptedFundsValue>
+              <AcceptedFundsValue>
+                {acceptedFundsUsd != null ? `$${formatCompactNumber(acceptedFundsUsd)}` : '-'}
+              </AcceptedFundsValue>
               <AcceptedFundsTokenAmount>
                 {formatCompactNumber(acceptedFundsToken)} {currentPoolInfo?.asset}
               </AcceptedFundsTokenAmount>
@@ -540,7 +500,9 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
 
             <StatsColumn item xs={12} sm={2.4}>
               <AcceptedFundsLabel>Pending Funds</AcceptedFundsLabel>
-              <AcceptedFundsValue>${formatCompactNumber(pendingFundsUsd)}</AcceptedFundsValue>
+              <AcceptedFundsValue>
+                {pendingFundsUsd != null ? `$${formatCompactNumber(pendingFundsUsd)}` : '-'}
+              </AcceptedFundsValue>
               <AcceptedFundsTokenAmount>
                 {formatCompactNumber(pendingFundsToken)} {currentPoolInfo?.asset}
               </AcceptedFundsTokenAmount>
@@ -553,7 +515,9 @@ export const PoolPage = ({ chainId, poolId }: PoolPageProps) => {
 
             <StatsColumn item xs={12} sm={2.4}>
               <AcceptedFundsLabel>My Funds</AcceptedFundsLabel>
-              <AcceptedFundsValue>${formatCompactNumber(myFundsUsd)}</AcceptedFundsValue>
+              <AcceptedFundsValue>
+                {myFundsUsd != null ? `$${formatCompactNumber(myFundsUsd)}` : '-'}
+              </AcceptedFundsValue>
               <AcceptedFundsTokenAmount>
                 {formatCompactNumber(myFundsToken)} {currentPoolInfo?.asset}
               </AcceptedFundsTokenAmount>
