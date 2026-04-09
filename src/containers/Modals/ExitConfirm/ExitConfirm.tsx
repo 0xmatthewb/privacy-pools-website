@@ -44,7 +44,7 @@ const ExitConfirmForm = () => {
       <ModalTitle variant='h2'>Rage Quit Privacy Pools</ModalTitle>
 
       <DescriptionText>
-        By exiting this Pool, you are withdrawing all funds you have shielded or pending to your depositing address.{' '}
+        By exiting this Pool, you are withdrawing all deposited and pending funds to your depositing address.{' '}
         <strong>You will not gain any privacy.</strong>
       </DescriptionText>
 
