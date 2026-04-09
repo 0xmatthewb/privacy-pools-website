@@ -61,10 +61,10 @@ export const MigrationModal = () => {
       <Content>
         {flowState === 'intro' && (
           <>
-            <Title>Key Migration Needed</Title>
+            <Title>Security Update Required</Title>
             <Description>
-              Your security is our priority. We are increasing the entropy and strength of your keys. Migrate your keys
-              to continue using all features.
+              We improved how your keys are generated for better security. Your deposits are safe. Migrate your keys to
+              continue using all features.
             </Description>
             <ActionButton onClick={startMigration}>Continue with Migration</ActionButton>
           </>
@@ -74,7 +74,7 @@ export const MigrationModal = () => {
           <>
             <CircularProgress size={48} />
             <Title>Migrating Keys...</Title>
-            <Description>Please wait while we upgrade the entropy of your keys.</Description>
+            <Description>Please wait while we upgrade the security of your keys.</Description>
             {retryCount > 0 && (
               <RetryLabel>
                 Retrying failed transactions ({retryCount}/{maxRetries})

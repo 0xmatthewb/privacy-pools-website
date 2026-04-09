@@ -9,7 +9,7 @@ export const ExitMessage = () => {
         <Title>You&apos;re exiting the Pool</Title>
       </Stack>
 
-      <Text>The exit returns your funds without privacy. Use the Withdraw for untraceability.</Text>
+      <Text>Exiting returns your funds publicly to your deposit address. Use Withdraw instead to keep your transaction private.</Text>
     </Container>
   );
 };
