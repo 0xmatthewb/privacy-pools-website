@@ -229,18 +229,18 @@ export const ChainProvider = ({ children }: Props) => {
 
   const allQueriesAreLoading = useMemo(() => feesQueries.some((q) => q.isLoading), [feesQueries]);
 
+  // Preserve the order configured in chainData so the primary relayer
+  // (Fast Relay) is always shown first in the UI even when an alternative
+  // relayer happens to be cheaper.
   const relayersData: RelayerDataType[] = useMemo(
     () =>
-      feesQueries
-        .map((query, index) => ({
-          name: activeRelayers[index].name,
-          url: activeRelayers[index].url,
-          fees: query.data?.feeBPS,
-          relayerAddress: query.data?.feeReceiverAddress,
-          isSelectable:
-            !query.error && query.data?.feeBPS !== undefined && query.data?.feeReceiverAddress !== undefined,
-        }))
-        .sort((a, b) => (Number(a.fees) ?? Infinity) - (Number(b.fees) ?? Infinity)),
+      feesQueries.map((query, index) => ({
+        name: activeRelayers[index].name,
+        url: activeRelayers[index].url,
+        fees: query.data?.feeBPS,
+        relayerAddress: query.data?.feeReceiverAddress,
+        isSelectable: !query.error && query.data?.feeBPS !== undefined && query.data?.feeReceiverAddress !== undefined,
+      })),
     [feesQueries, activeRelayers],
   );
 
