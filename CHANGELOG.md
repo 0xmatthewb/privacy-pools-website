@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Restored the relayer dropdown so users can pick between Fast Relay and Cloaked Relay (Fast Relay stays first)
+- Display the selected relayer name as the fee collector in the withdrawal review modal instead of always showing `0xBow`
 
 ## [2.14.0] - 2026-05-11
 
