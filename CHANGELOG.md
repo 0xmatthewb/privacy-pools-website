@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed missing USD price for BOLD, sUSDS, USDe, frxUSD, fxUSD and yUSND pool stats. Live prices fall back to the ASP's reported pool USD value when Alchemy doesn't list the token, which also shows accurate prices for yield-bearing assets like sUSDS instead of pinning them at $1.
 
+### Security
+
+- Bumped Next.js to 15.5.18, picking up the 12 security advisories from the v16.2.6 release (Server Components DoS, middleware/proxy bypasses, WebSocket SSRF, CSP nonce XSS, Image Optimization DoS and RSC cache poisoning).
+
 ## [2.2.0] - 2026-03-19
 
 ### Fixed
